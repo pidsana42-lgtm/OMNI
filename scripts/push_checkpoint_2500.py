@@ -41,6 +41,7 @@ def main():
         audio_encoder_name="typhoon-ai/typhoon-whisper-turbo",
     )
     model = OmniModalModel(config)
+    model.llm.resize_token_embeddings(len(processor.tokenizer))
     model = accelerator.prepare(model)
 
     print(f"[2/4] Loading state from {checkpoint_dir}...")
