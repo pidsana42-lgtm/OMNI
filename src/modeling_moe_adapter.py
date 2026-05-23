@@ -82,7 +82,32 @@ def convert_mlp_to_moe(
             continue
 
         original_mlp = layer.mlp
-        hidden_dim = llm_model.config.hidden_size
+
+        # Robustly determine hidden_dim
+        hidden_dim = None
+        for config_attr in ["hidden_size", "text_config.hidden_size", "d_model"]:
+            if "." in config_attr:
+                part1, part2 = config_attr.split(".")
+                if hasattr(llm_model.config, part1):
+                    sub_cfg = getattr(llm_model.config, part1)
+                    if hasattr(sub_cfg, part2):
+                        hidden_dim = getattr(sub_cfg, part2)
+                        break
+            else:
+                if hasattr(llm_model.config, config_attr):
+                    hidden_dim = getattr(llm_model.config, config_attr)
+                    break
+        
+        # MLP shape-based fallback if config attributes are missing or structured differently
+        if hidden_dim is None:
+            if hasattr(original_mlp, "gate_proj") and hasattr(original_mlp.gate_proj, "in_features"):
+                hidden_dim = original_mlp.gate_proj.in_features
+            elif hasattr(original_mlp, "up_proj") and hasattr(original_mlp.up_proj, "in_features"):
+                hidden_dim = original_mlp.up_proj.in_features
+            elif hasattr(original_mlp, "proj") and hasattr(original_mlp.proj, "weight"):
+                hidden_dim = original_mlp.proj.weight.shape[-1]
+            else:
+                raise AttributeError("Cannot determine hidden dimension size for the FFN layer.")
 
         # 2. Replicate the original pretrained FFN into num_experts copies
         experts = []
