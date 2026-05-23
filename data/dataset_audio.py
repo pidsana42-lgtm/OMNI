@@ -30,7 +30,7 @@ from datasets import load_dataset, Audio as HFAudio
 from src.processing_omni import OmniProcessor
 
 
-TRANSCRIPT_COLUMNS = ["sentence", "transcription", "text", "transcript", "label"]
+TRANSCRIPT_COLUMNS = ["response", "sentence", "transcription", "text", "transcript", "label", "instruction"]
 
 
 class AudioTextDataset(Dataset):

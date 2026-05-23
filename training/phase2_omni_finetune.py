@@ -93,6 +93,7 @@ def main():
         hf_dataset_name=cfg.data.audio.hf_dataset_name,
         hf_dataset_config=cfg.data.audio.get("hf_dataset_config"),
         hf_split=cfg.data.audio.get("hf_split", "train"),
+        text_column=cfg.data.audio.get("text_column"),
         max_audio_seconds=cfg.data.max_audio_seconds,
     )
 

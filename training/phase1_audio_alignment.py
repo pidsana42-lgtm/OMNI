@@ -94,6 +94,7 @@ def main():
         hf_dataset_name=cfg.data.hf_dataset_name,
         hf_dataset_config=cfg.data.get("hf_dataset_config", None),
         hf_split=cfg.data.get("hf_split", "train"),
+        text_column=cfg.data.get("text_column", None),
         max_audio_seconds=cfg.data.max_audio_seconds,
         max_text_length=cfg.data.max_text_length,
     )
@@ -103,6 +104,7 @@ def main():
         hf_dataset_name=cfg.data.hf_dataset_name,
         hf_dataset_config=cfg.data.get("hf_dataset_config", None),
         hf_split=cfg.data.get("eval_split", "validation"),
+        text_column=cfg.data.get("text_column", None),
         max_audio_seconds=cfg.data.max_audio_seconds,
         max_text_length=cfg.data.max_text_length,
     )
