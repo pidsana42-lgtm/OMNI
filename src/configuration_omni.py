@@ -49,6 +49,12 @@ class OmniConfig(PretrainedConfig):
         # ALWAYS False during training — prevents thinking loops in 0.8B
         enable_thinking: bool = False,
 
+        # ── Audio Output Settings (Phase 4) ───────────────────────────────
+        enable_audio_output: bool = False,
+        audio_codebook_size: int = 1024,
+        audio_num_codebooks: int = 24,
+        audio_codec_bandwidth: float = 6.0,
+
         # ── Misc ──────────────────────────────────────────────────────────
         **kwargs,
     ):
@@ -76,3 +82,9 @@ class OmniConfig(PretrainedConfig):
 
         # Critical: disable thinking during training
         self.enable_thinking = enable_thinking
+
+        # Audio Output Settings
+        self.enable_audio_output = enable_audio_output
+        self.audio_codebook_size = audio_codebook_size
+        self.audio_num_codebooks = audio_num_codebooks
+        self.audio_codec_bandwidth = audio_codec_bandwidth
