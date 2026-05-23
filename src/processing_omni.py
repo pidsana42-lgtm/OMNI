@@ -92,7 +92,7 @@ class OmniProcessor:
         Must be called once before training — then save the tokenizer
         alongside the model so embeddings stay consistent.
         """
-        existing = set(self.tokenizer.additional_special_tokens)
+        existing = set(self.tokenizer.all_special_tokens)
         new_tokens = [t for t in AUDIO_SPECIAL_TOKENS if t not in existing]
 
         if new_tokens:
