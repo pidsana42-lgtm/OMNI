@@ -74,9 +74,30 @@ def run_inference(args):
         ds = load_dataset("typhoon-ai/typhoon-audio-preview-data", split="pretrained", streaming=True, trust_remote_code=True)
         sample = next(iter(ds))
 
-        audio_data = sample["audio"]
-        waveform = audio_data["array"].astype(np.float32)
-        sr = audio_data["sampling_rate"]
+        waveform = None
+        sr = 16000
+
+        # Try to load audio from 'audio' dict first, otherwise fall back to 'path'
+        if "audio" in sample and sample["audio"] is not None:
+            audio_data = sample["audio"]
+            waveform = audio_data["array"].astype(np.float32)
+            sr = audio_data["sampling_rate"]
+        elif "path" in sample and sample["path"] is not None:
+            path_val = sample["path"]
+            print(f"[Demo] Loading audio from path: {path_val}")
+            import soundfile as sf
+            try:
+                waveform, sr = sf.read(path_val)
+                waveform = waveform.astype(np.float32)
+            except Exception as e:
+                print(f"[Warning] Failed to load local path {path_val}: {e}")
+                raise RuntimeError(
+                    f"Could not load audio from {path_val}. If you are running this locally and the cloud dataset is not mounted, "
+                    f"please specify a local file using --audio_file instead."
+                )
+
+        if waveform is None:
+            raise ValueError("Could not find or load audio from the dataset sample.")
 
         audio_batch = processor.process_audio(waveform, sr)
         audio_features = audio_batch["input_features"].to(args.device, dtype=torch.bfloat16)
