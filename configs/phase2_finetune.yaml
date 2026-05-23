@@ -26,11 +26,12 @@ data:
     hf_split: "train"
 
   vision:
-    # LLaVA Instruct — image QA dataset ที่ทำงานได้จริงบน HF
+    # LLaVA Instruct — load only llava_instruct_150k.json to avoid schema
+    # mismatch with llava_v1_5_mix665k.json (which adds an extra 'model' column)
     hf_dataset_name: "liuhaotian/LLaVA-Instruct-150K"
     hf_split: "train"
+    data_files: "llava_instruct_150k.json"
     colpali_mode: false
-    # LLaVA ใช้ 'conversations' format — dataset_vision.py handle ได้อยู่แล้ว
 
 training:
   num_epochs: 2
