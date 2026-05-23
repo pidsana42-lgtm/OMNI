@@ -109,6 +109,8 @@ def main():
         hf_dataset_name=cfg.data.vision.hf_dataset_name,
         hf_split=cfg.data.vision.get("hf_split", "train"),
         data_files=cfg.data.vision.get("data_files"),
+        question_column=cfg.data.vision.get("question_column", "anchor"),
+        answer_column=cfg.data.vision.get("answer_column", None),
         colpali_mode=cfg.data.vision.get("colpali_mode", False),
     )
 

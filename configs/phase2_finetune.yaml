@@ -9,44 +9,48 @@ data:
   audio_ratio: 0.35
   text_ratio:  0.35
   vision_ratio: 0.30
-  total_samples: 200000   # Per epoch
+  total_samples: 10000   # ลดลงให้เหมาะกับ cloud budget
   max_audio_seconds: 30.0
   max_text_length: 1024
 
   audio:
-    # Large-scale Typhoon Audio preview data
-    hf_dataset_name: "typhoon-ai/typhoon-audio-preview-data"
-    hf_dataset_config: null
-    hf_split: "sft"
+    # Google FLEURS TH — เสียงจริงฝังใน HF (แก้แล้วจาก Phase 1)
+    hf_dataset_name: "google/fleurs"
+    hf_dataset_config: "th_th"
+    hf_split: "train"
+    text_column: "transcription"
 
   text:
-    # High-quality Thai instruction tuning dataset from Typhoon
-    hf_dataset_name: "typhoon-ai/typhoon-s-instruct-post-training"
-    hf_split: "sft"
+    # FineTome — high-quality instruction dataset, ไม่ต้อง login
+    hf_dataset_name: "mlabonne/FineTome-100k"
+    hf_split: "train"
 
   vision:
-    # Multimodal image understanding dataset from Typhoon
-    hf_dataset_name: "typhoon-ai/typhoon-vision-preview-data"
-    data_files: "data/finetune-00000-of-00001.json"
+    # LLaVA Instruct — image QA dataset ที่ทำงานได้จริงบน HF
+    hf_dataset_name: "liuhaotian/LLaVA-Instruct-150K"
     hf_split: "train"
     colpali_mode: false
+    # LLaVA ใช้ 'conversations' format — dataset_vision.py handle ได้อยู่แล้ว
 
 training:
   num_epochs: 2
-  batch_size: 4
-  eval_batch_size: 8
-  gradient_accumulation_steps: 8   # effective batch = 32
-  llm_lr: 2.0e-5                   # Lower for LLM backbone
-  projector_lr: 1.0e-4             # Higher for projector
+  batch_size: 2
+  eval_batch_size: 4
+  gradient_accumulation_steps: 16   # effective batch = 32
+  llm_lr: 2.0e-5
+  projector_lr: 1.0e-4
   weight_decay: 0.01
   max_grad_norm: 1.0
   warmup_ratio: 0.03
-  num_workers: 8
-  save_steps: 1000
+  num_workers: 4
+  save_steps: 100
   output_dir: "outputs/phase2"
+  push_to_hub: true
+  hub_model_id: "thai-omni-modal-0.8b-phase2"
+  hub_private: true
 
 logging:
   use_wandb: true
   wandb_project: "thai-omni-modal"
   run_name: "phase2-omni-finetune"
-  log_every: 5
+  log_every: 50
