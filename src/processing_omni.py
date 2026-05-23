@@ -163,7 +163,22 @@ class OmniProcessor:
 
         KEY: enable_thinking=False prevents 0.8B model from
         entering infinite thinking loops during training & inference.
+
+        If the loaded checkpoint's tokenizer is missing a chat_template
+        (e.g. when saving an OmniModal checkpoint), we auto-patch it
+        from the Qwen3.5-0.8B base tokenizer so inference always works.
         """
+        # ── Auto-patch missing chat_template ─────────────────────────────
+        if not getattr(self.tokenizer, "chat_template", None):
+            print("[OmniProcessor] ⚠️  No chat_template found in checkpoint tokenizer. "
+                  "Patching from Qwen/Qwen3.5-0.8B base...")
+            from transformers import AutoTokenizer
+            _base_tok = AutoTokenizer.from_pretrained("Qwen/Qwen3.5-0.8B", trust_remote_code=True)
+            self.tokenizer.chat_template = _base_tok.chat_template
+            # Also patch on the llm_processor's tokenizer if it's a different object
+            if hasattr(self.llm_processor, "tokenizer"):
+                self.llm_processor.tokenizer.chat_template = _base_tok.chat_template
+
         return self.llm_processor.apply_chat_template(
             messages,
             add_generation_prompt=add_generation_prompt,
@@ -204,7 +219,11 @@ class OmniProcessor:
         return self.tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
 
     def save_pretrained(self, save_directory: str):
+        # Save the full llm_processor (includes image processor config etc.)
         self.llm_processor.save_pretrained(save_directory)
+        # Explicitly save the tokenizer with chat_template to tokenizer_config.json
+        # This ensures apply_chat_template works when reloading the checkpoint
+        self.tokenizer.save_pretrained(save_directory)
         self.audio_processor.save_pretrained(save_directory)
         print(f"[OmniProcessor] Saved to {save_directory}")
 
