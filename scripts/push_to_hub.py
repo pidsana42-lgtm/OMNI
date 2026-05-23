@@ -62,6 +62,15 @@ def main():
     repo_id = f"{args.username}/{args.repo_name}"
     print(f"[HF Hub] Preparing to push {local_dir} to {repo_id}...")
 
+    # Detect optimizer and scheduler files for cloud training resume
+    has_optimizer = any(local_dir.glob("**/optimizer*")) or any(local_dir.glob("**/optimizer*.bin"))
+    has_scheduler = any(local_dir.glob("**/scheduler*")) or any(local_dir.glob("**/scheduler*.bin"))
+    if has_optimizer or has_scheduler:
+        print("[HF Hub] 🔄 Detected active training state (optimizer and/or scheduler files).")
+        print("[HF Hub] Pushing full checkpoint including optimizer states to Hugging Face Hub...")
+    else:
+        print("[HF Hub] 📦 Pushing standard model weights and configurations to Hugging Face Hub...")
+
     # Initialize Hugging Face API
     api = HfApi(token=args.token)
 
