@@ -243,7 +243,8 @@ class AudioTextDataset(Dataset):
         input_features = audio_features["input_features"].squeeze(0)  # [128, 3000]
 
         # ── Tokenize text ─────────────────────────────────────────────────
-        transcript = str(item[self.text_col]).strip()
+        # Use the dynamically resolved transcript
+        transcript = str(transcript).strip()
         messages = self.processor.build_audio_instruction(
             transcript=transcript,
             system_prompt=self.system_prompt,
