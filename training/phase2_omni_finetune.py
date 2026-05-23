@@ -104,8 +104,9 @@ def main():
     from src.modeling_moe_adapter import convert_mlp_to_moe
     model = convert_mlp_to_moe(model, num_experts=4, top_k=2)
 
+    # Force loading tokenizer from Qwen to bypass corrupted Phase 1 tokenizer
     processor = OmniProcessor.from_pretrained(
-        llm_name=model.config.llm_model_name,  # Load from base LLM since Phase 1 HF tokenizer might be corrupted
+        llm_name="Qwen/Qwen3.5-0.8B",
         audio_encoder_name=model.config.audio_encoder_name,
     )
 

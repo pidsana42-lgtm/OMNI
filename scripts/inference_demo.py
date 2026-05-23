@@ -51,8 +51,9 @@ def parse_args():
 def run_inference(args):
     print(f"[Demo] Loading model from {args.model_path}...")
     model = OmniModalModel.from_pretrained(args.model_path)
+    # Force loading tokenizer from Qwen to bypass corrupted Phase 1 tokenizer
     processor = OmniProcessor.from_pretrained(
-        llm_name=model.config.llm_model_name,
+        llm_name="Qwen/Qwen3.5-0.8B",
         audio_encoder_name=model.config.audio_encoder_name,
     )
     model = model.to(args.device, dtype=torch.bfloat16)
