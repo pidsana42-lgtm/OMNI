@@ -45,6 +45,23 @@ from data import (
 )
 
 
+def dynamic_push_to_hub(local_path: str, repo_name: str, private: bool = True):
+    import importlib.util
+    from pathlib import Path
+    project_root = Path(__file__).parent.parent
+    push_to_hub_path = project_root / "scripts" / "push_to_hub.py"
+    if not push_to_hub_path.exists():
+        raise FileNotFoundError(f"Could not find push_to_hub.py at {push_to_hub_path}")
+    spec = importlib.util.spec_from_file_location("push_to_hub_dynamic", str(push_to_hub_path))
+    push_to_hub_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(push_to_hub_module)
+    push_to_hub_module.push_to_hub_direct(
+        local_path=local_path,
+        repo_name=repo_name,
+        private=private,
+    )
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/phase2_finetune.yaml")
@@ -268,7 +285,33 @@ def main():
             if global_step % cfg.training.save_steps == 0 and accelerator.is_main_process:
                 ckpt_path = output_dir / f"checkpoint-{global_step}"
                 accelerator.save_state(str(ckpt_path))
-                print(f"\n[Phase2] ✅ Checkpoint at step {global_step}")
+                print(f"\n[Phase2] ✅ Checkpoint saved at step {global_step}")
+
+                # Save HF weights and processor in the checkpoint directory
+                hf_ckpt_path = output_dir / f"checkpoint-{global_step}-hf"
+                accelerator.unwrap_model(model).save_pretrained(str(hf_ckpt_path))
+                processor.save_pretrained(str(hf_ckpt_path))
+
+                # Bundle accelerator states (optimizer/scheduler) into the HF directory
+                import shutil
+                for file_path in ckpt_path.glob("*"):
+                    dest_file = hf_ckpt_path / file_path.name
+                    if not dest_file.exists():
+                        if file_path.is_dir():
+                            shutil.copytree(file_path, dest_file)
+                        else:
+                            shutil.copy(file_path, dest_file)
+
+                # Push step checkpoint to HF Hub
+                if cfg.training.get("push_to_hub", False):
+                    try:
+                        dynamic_push_to_hub(
+                            local_path=str(hf_ckpt_path),
+                            repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase2"),
+                            private=cfg.training.get("hub_private", True),
+                        )
+                    except Exception as e:
+                        print(f"[Phase2] HF push failed: {e}")
 
     # ── Final save ────────────────────────────────────────────────────────
     if accelerator.is_main_process:
@@ -276,6 +319,16 @@ def main():
         accelerator.unwrap_model(model).save_pretrained(str(final_path))
         processor.save_pretrained(str(final_path))
         print(f"\n[Phase2] ✅ Complete! Model at {final_path}")
+
+        if cfg.training.get("push_to_hub", False):
+            try:
+                dynamic_push_to_hub(
+                    local_path=str(final_path),
+                    repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase2"),
+                    private=cfg.training.get("hub_private", True),
+                )
+            except Exception as e:
+                print(f"[Phase2] HF push failed: {e}")
 
     if cfg.logging.use_wandb and accelerator.is_main_process:
         wandb.finish()
