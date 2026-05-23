@@ -37,6 +37,7 @@ class VisionTextDataset(Dataset):
         hf_dataset_name: str,
         hf_dataset_config: Optional[str] = None,
         hf_split: str = "train",
+        data_files: Optional[str] = None,
         image_column: str = "image",
         question_column: str = "anchor",
         answer_column: Optional[str] = None,
@@ -53,11 +54,12 @@ class VisionTextDataset(Dataset):
         self.answer_col = answer_column
         self.colpali_mode = colpali_mode
 
-        print(f"[VisionDataset] Loading {hf_dataset_name} [{hf_split}]")
+        print(f"[VisionDataset] Loading {hf_dataset_name} [{hf_split}] (data_files={data_files})")
         self.data = load_dataset(
             hf_dataset_name,
             hf_dataset_config,
             split=hf_split,
+            data_files=data_files,
             trust_remote_code=True,
         )
         print(f"[VisionDataset] Loaded {len(self.data):,} samples")
@@ -92,6 +94,17 @@ class VisionTextDataset(Dataset):
             # No ground-truth answer in colpali dataset — use Qwen to generate
             # For training: we treat it as image captioning
             answer = item.get("answer_type", "")  # fallback
+        elif "conversations" in item:
+            # Extract from conversations list
+            question = ""
+            answer = ""
+            for turn in item["conversations"]:
+                role = turn.get("from", turn.get("role", "user"))
+                value = turn.get("value", turn.get("content", ""))
+                if role in ["human", "user"] and not question:
+                    question = value
+                elif role in ["gpt", "assistant"] and not answer:
+                    answer = value
         else:
             question = str(item.get(self.question_col, "อธิบายภาพนี้"))
             answer = str(item.get(self.answer_col, "")) if self.answer_col else ""

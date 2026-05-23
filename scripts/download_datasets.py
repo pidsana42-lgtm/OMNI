@@ -11,10 +11,10 @@ import sys
 from datasets import load_dataset
 
 
-def download_dataset(name, split, config=None):
+def download_dataset(name, split, config=None, data_files=None):
     try:
-        print(f"[HF Data] Downloading '{name}' (split: {split}, config: {config})...")
-        load_dataset(name, name=config, split=split, trust_remote_code=True)
+        print(f"[HF Data] Downloading '{name}' (split: {split}, config: {config}, data_files: {data_files})...")
+        load_dataset(name, name=config, split=split, data_files=data_files, trust_remote_code=True)
         print(f"  ✅ Successfully cached '{name}' [{split}]")
     except Exception as e:
         print(f"  ❌ Error downloading '{name}': {e}")
@@ -42,7 +42,8 @@ def main():
     # Phase 2: Vision Dataset
     download_dataset(
         name="typhoon-ai/typhoon-vision-preview-data",
-        split="finetune"
+        split="train",
+        data_files="data/finetune-00000-of-00001.json"
     )
 
     # Phase 4: TTS Resynthesized Dataset

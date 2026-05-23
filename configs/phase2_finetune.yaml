@@ -27,7 +27,8 @@ data:
   vision:
     # Multimodal image understanding dataset from Typhoon
     hf_dataset_name: "typhoon-ai/typhoon-vision-preview-data"
-    hf_split: "finetune"
+    data_files: "data/finetune-00000-of-00001.json"
+    hf_split: "train"
     colpali_mode: false
 
 training:
