@@ -156,5 +156,55 @@ def main():
         print("[HF Hub] Hint: Ensure you are logged in (python scripts/login_hf.py) or HF_TOKEN is exported.")
 
 
+def push_to_hub_direct(local_path: str, repo_name: str, private: bool = True):
+    """Programmatically upload a local checkpoint to Hugging Face Hub."""
+    local_dir = Path(local_path)
+    if not local_dir.exists():
+        print(f"[Error] Local path '{local_dir}' does not exist.")
+        return
+
+    # Automatically prepare custom model files and auto_map config
+    prepare_custom_model_code(local_dir)
+
+    # Initialize Hugging Face API
+    token = os.environ.get("HF_TOKEN")
+    api = HfApi(token=token)
+
+    try:
+        user_info = api.whoami()
+        username = user_info["name"]
+    except Exception:
+        username = "Phonsiri"
+
+    repo_id = f"{username}/{repo_name}"
+    print(f"[HF Hub] Preparing to push {local_dir} to {repo_id}...")
+
+    # Step 1: Create repository
+    try:
+        create_repo(
+            repo_id=repo_id,
+            token=token,
+            private=private,
+            exist_ok=True,
+            repo_type="model",
+        )
+        print(f"[HF Hub] Repository '{repo_id}' ready.")
+    except Exception as e:
+        print(f"[HF Hub] Warning during repository creation: {e}")
+
+    # Step 2: Upload folder
+    try:
+        print(f"[HF Hub] Uploading files from {local_dir}...")
+        api.upload_folder(
+            folder_path=str(local_dir),
+            repo_id=repo_id,
+            repo_type="model",
+            commit_message=f"Auto-upload model checkpoint: {local_dir.name}",
+        )
+        print(f"[HF Hub] 🎉 Success! Model uploaded to: https://huggingface.co/{repo_id}")
+    except Exception as e:
+        print(f"[HF Hub] ❌ Upload failed: {e}")
+
+
 if __name__ == "__main__":
     main()
