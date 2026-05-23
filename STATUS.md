@@ -1,146 +1,135 @@
 # Thai Omni-Modal AI — Project Status & Run Manifest
-Last Updated: 2026-05-23 (Dry-Runs 100% Passed)
+Last Updated: 2026-05-23 (Phase 1 Real Audio Training — In Progress)
 
-## 📌 Current Status: Ready for H200 Execution
-- **Dense Architecture & Pipeline**: Scaffolded and verified. (`python dry_run.py` -> 6/6 Passed)
-- **MoE Architecture & Adapter**: Scaffolded and verified. (`python dry_run_moe.py` -> 3/3 Passed)
-- **Speech Output Support**: Added EnCodec wrapper, AudioLMHead, and chunked streaming inference. Ready for Phase 4.
-- **Base Models Configured**:
-  - LLM Backbone: `Qwen/Qwen3.5-0.8B` (Native Vision support)
-  - Audio Encoder: `typhoon-ai/typhoon-whisper-turbo` (Outputs 1280-dim hidden states)
-- **Dataset Setup**: Integrated official Typhoon datasets for all phases (ASR, Text, Vision, and TTS Resynthesized).
-- **Hugging Face Hub**: Added `scripts/push_to_hub.py` utility for direct model uploads to `Phonsiri` HF account.
-- **Cloud Compatibility**: Default attention implementation set to PyTorch SDPA (`attn_implementation="sdpa"`) to support cloud instances without Flash Attention.
-- **Anti-Thinking Loop Guard**: Confirmed `enable_thinking=False` is hardcoded globally to prevent infinite loops in the 0.8B model.
+## 📌 Current Status: Phase 1 Re-Training with Real Audio
+
+### ✅ Completed
+- **Dense Architecture & Pipeline**: Verified. (`python dry_run.py` → 6/6 Passed)
+- **MoE Architecture & Adapter**: Verified. (`python dry_run_moe.py` → 3/3 Passed)
+- **Token Setup**: Special audio tokens added to tokenizer (`outputs/tokenizer_setup/`)
+- **HF Hub Sync**: `scripts/push_to_hub.py` ready; model auto-syncs every `save_steps`
+
+### 🔄 In Progress
+- **Phase 1 Audio Alignment** — Re-training from scratch on **real Thai speech**
+  - Dataset: `google/fleurs` (th_th) — เสียงไทยจริง ฝังอยู่ใน HF โดยตรง ✅
+  - Dataset เก่า (`typhoon-ai/typhoon-audio-preview-data`) มีแค่ path strings ชี้ไฟล์บนเซิร์ฟเวอร์ SCB-10X ❌
+  - ผล: 3,500 steps แรกเทรนกับเสียงเงียบ (Silence/Zeros) ทั้งหมด → ล้างทิ้ง เริ่มใหม่
+  - Training config: `configs/phase1_alignment.yaml`
+  - Checkpoint dir: `outputs/phase1/` (save every 100 steps)
+
+### ⏳ Pending
+- **Phase 2**: Omni SFT (Audio + Vision + Text) — รอ Phase 1 เสร็จ
+- **Phase 3**: Distillation → Streaming Head
+- **Phase 4**: Native Speech Output (AudioLMHead)
+- **MoE Conversion**: Dense → 4-Expert MoE (Phase 2 SFT)
+
+---
+
+## 🐛 Critical Bugs Found & Fixed
+
+| Bug | ไฟล์ | สถานะ |
+|-----|------|--------|
+| `local_audio_dir` ไม่ถูก save เป็น `self.local_audio_dir` → NameError ถูก swallow โดย try/except → fallback เสียงเงียบ | `data/dataset_audio.py` | ✅ Fixed |
+| `_get_embed_tokens()` หา embed_tokens ใน LLM ไม่เจอ | `src/modeling_omni.py` | ✅ Fixed |
+| `OmniConfig` ไม่มี `enable_audio_output` attribute | `src/configuration_omni.py` | ✅ Fixed |
+| `Qwen2Tokenizer` ไม่มี `additional_special_tokens` attribute | `src/processing_omni.py` | ✅ Fixed |
+| Dataset `typhoon-audio-preview-data` มีแค่ path strings ไม่มีเสียงจริง | `configs/phase1_alignment.yaml` | ✅ Fixed (switched to FLEURS) |
+| CUDA OOM ที่ batch_size=8 | `configs/phase1_alignment.yaml` | ✅ Fixed (batch=4, grad_accum=8) |
 
 ---
 
 ## 📂 Codebase Directory Map
 
 ```
-/Users/phonsirithabunsri/Desktop/omni/
-├── STATUS.md                     # <-- รายงานสถานะโปรเจกต์ ลำดับการรันด่วน (อ่านที่แรก)
-├── MoE.md                        # แผนภาพและรายละเอียดสถาปัตยกรรม MoE 
-├── dry_run.py                    # สคริปต์ตรวจสอบการรันของรุ่นปกติ (Dense)
-├── dry_run_moe.py                # สคริปต์ตรวจสอบการรันของรุ่นผสมผู้เชี่ยวชาญ (MoE)
+omni/
+├── STATUS.md                     # <-- รายงานสถานะโปรเจกต์ (อ่านที่แรก)
+├── MoE.md                        # แผนภาพและรายละเอียดสถาปัตยกรรม MoE
+├── dry_run.py                    # ตรวจสอบ Dense architecture (6/6 Passed)
+├── dry_run_moe.py                # ตรวจสอบ MoE architecture (3/3 Passed)
 ├── requirements.txt              # แพ็คเกจที่ต้องติดตั้ง
-├── README.md                     # เอกสารคำแนะนำคู่มือการใช้งานตัวเต็ม
 │
-├── configs/                      # ค่าคอนฟิกในการเทรน
-│   ├── phase1_alignment.yaml     # คอนฟิกการแปลงประสาทสัมผัสเสียง
-│   ├── phase2_finetune.yaml      # คอนฟิก SFT รวม 3 Modalities (Audio, Vision, Text)
-│   ├── phase3_distillation.yaml  # คอนฟิกการ Distill ไปยัง Student Streaming Head
-│   └── phase4_audio_output.yaml  # คอนฟิกการเทรนเสียงพูดตอบกลับ Native [NEW]
+├── configs/
+│   ├── phase1_alignment.yaml     # ✅ ใช้งานอยู่ — FLEURS th_th, save_steps=100
+│   ├── phase2_finetune.yaml      # SFT รวม 3 Modalities
+│   ├── phase3_distillation.yaml  # Distill → Streaming Head
+│   └── phase4_audio_output.yaml  # Native Speech Output (AudioLMHead)
 │
-├── src/                          # โค้ดโครงสร้างหลัก
-│   ├── configuration_omni.py     # โครงสร้างคอนฟิก (OmniConfig)
-│   ├── modeling_omni.py          # คลาสโมเดลหลัก (OmniModalModel)
-│   ├── processing_omni.py        # ตัวเตรียมข้อมูลดิบ (OmniProcessor)
-│   ├── projector.py              # ตัวเชื่อมโยงเสียง (AudioProjector MLP)
-│   ├── moe.py                    # [MoE] โครงสร้างตัวกระจายงาน MoE (SparseMoELayer)
-│   ├── modeling_moe_adapter.py   # [MoE] ตัวแปลงโมเดล Dense ไปเป็น MoE
-│   └── audio_decoder.py          # [Speech Output] ตัวจัดการ EnCodec และ AudioLMHead [NEW]
+├── src/
+│   ├── configuration_omni.py     # OmniConfig
+│   ├── modeling_omni.py          # OmniModalModel (forward, embed_tokens fix)
+│   ├── processing_omni.py        # OmniProcessor (audio tokenizer)
+│   ├── projector.py              # AudioProjector MLP (4.7M params, trainable Phase 1)
+│   ├── moe.py                    # SparseMoELayer (Top-2 routing)
+│   ├── modeling_moe_adapter.py   # Dense → MoE converter
+│   └── audio_decoder.py          # EnCodec + AudioLMHead (Phase 4)
 │
-├── data/                         # ตัวเตรียมข้อมูลสำหรับเทรน (Data Loader)
-│   ├── collator.py               # จัดการขนาด/Padding ของ Mixed batch ให้เหมาะสม
-│   ├── dataset_audio.py          # โหลดข้อมูลเสียง (Audio Dataset)
-│   ├── dataset_vision.py         # โหลดข้อมูลภาพ / ColPali
-│   ├── dataset_agent.py          # [MoE] โหลดข้อมูลสอน Agent (Tool-use / ReAct)
-│   ├── dataset_omni.py           # ตัวผสมข้อมูล SFT (Audio 35%, Text 35%, Vision 30%)
-│   └── dataset_audio_output.py   # โหลดข้อมูลคู่เสียงพูดคำตอบเป้าหมาย (Phase 4) [NEW]
+├── data/
+│   ├── collator.py               # OmniDataCollator (mixed-modality padding)
+│   ├── dataset_audio.py          # AudioTextDataset (local_audio_dir bug fixed ✅)
+│   ├── dataset_vision.py         # Vision / ColPali
+│   ├── dataset_agent.py          # Agent Tool-use
+│   ├── dataset_omni.py           # Mixed SFT (Audio 35%, Text 35%, Vision 30%)
+│   └── dataset_audio_output.py   # Phase 4 speech pairs
 │
-├── training/                     # สคริปต์ขั้นตอนการเทรน
-│   ├── phase1_audio_alignment.py # เทรนเฉพาะ AudioProjector เท่านั้น
-│   ├── phase2_omni_finetune.py   # เทรนสมอง LLM + Projector (แช่แข็งเสียง/ภาพ)
-│   ├── phase3_distillation.py    # Distill ความรู้ไปยัง Student (Streaming Head)
-│   └── phase4_audio_output.py    # เทรน AudioLMHead เพื่อตอบกลับเป็นเสียงพูด [NEW]
+├── training/
+│   ├── phase1_audio_alignment.py # ✅ ใช้งานอยู่ (gradient checkpointing, hub push)
+│   ├── phase2_omni_finetune.py   # LLM + Projector SFT
+│   ├── phase3_distillation.py    # Streaming head distillation
+│   └── phase4_audio_output.py    # AudioLMHead training
 │
-└── scripts/                      # สคริปต์อำนวยความสะดวก
-    ├── setup_tokens.py           # สร้าง Special tokens บน Tokenizer ก่อนเทรน (รันครั้งเดียว)
-    ├── inference_demo.py         # รันเดโมทดสอบอินเฟอเรนซ์เสียง/ภาพ/ข้อความ
-    ├── inference_stream.py       # รันเดโมตอบกลับเป็นเสียงพูดแบบ Streaming เรียลไทม์ [NEW]
-    └── push_to_hub.py            # พุชโมเดลขึ้น Hugging Face Hub (User: Phonsiri) [NEW]
+└── scripts/
+    ├── setup_tokens.py           # เพิ่ม audio special tokens (รันครั้งเดียว) ✅ Done
+    ├── download_datasets.py      # Pre-cache HF datasets
+    ├── inference_demo.py         # ทดสอบ inference (--test_dataset flag)
+    ├── push_to_hub.py            # Push model → HF Hub (Phonsiri account)
+    └── login_hf.py               # HF + W&B login
 ```
 
 ---
 
-## 🚀 Execution Guide (Next Steps)
+## 🚀 Quick Start (Lightning AI)
 
-รันคำสั่งเหล่านี้เมื่อนำไปใช้งานบนเครื่อง GPU H200:
-
-### Step 0: Ensure correct PYTHONPATH
-รันคำสั่งนี้ที่โฟลเดอร์หลักของโปรเจกต์ก่อนเริ่มรัน Python เสมอ
 ```bash
-export PYTHONPATH=$PYTHONPATH:$(pwd)
-```
-
-### Step 1: Install Dependencies
-```bash
+# 1. Clone & install
+git clone https://github.com/pidsana42-lgtm/OMNI.git && cd OMNI
 pip install -r requirements.txt
-pip install "transformers>=4.52"  # บังคับอัพเกรดเพื่อให้สามารถโหลด Qwen3.5-0.8B ได้
-pip install encodec sounddevice   # พิเศษสำหรับการตอบกลับเป็นเสียงพูด
-```
+export PYTHONPATH=$PYTHONPATH:$(pwd)
 
-### Step 2: Initialize Special Tokens (Run Once)
-```bash
+# 2. Login
+python scripts/login_hf.py --token "YOUR_HF_TOKEN"
+
+# 3. Setup tokens (once)
 python scripts/setup_tokens.py
-```
-*เก็บข้อมูลโทเค็นและโมเดลที่เพิ่มแล้วไว้ใน `outputs/tokenizer_setup/`*
 
-### Step 3: Run Phase 1 — Audio Alignment
-```bash
+# 4. Phase 1 — Real Audio Alignment (google/fleurs th_th)
 python -m training.phase1_audio_alignment --config configs/phase1_alignment.yaml
 ```
-*เก็บผลลัพธ์ไว้ที่ `outputs/phase1/best_phase1/`*
 
-### Step 4: Run Phase 2 — Omni Fine-Tuning (SFT)
-```bash
-python -m training.phase2_omni_finetune \
-    --config configs/phase2_finetune.yaml \
-    --phase1_checkpoint outputs/phase1/best_phase1
-```
-*เก็บผลลัพธ์โมเดลแบบปกติไว้ที่ `outputs/phase2/phase2_final/`*
+**Expected Phase 1 behavior:**
+- Loss เริ่มต้นประมาณ ~5.5 (random), ลดลงต่อเนื่อง → ดีกว่า 3.0 คือ alignment เริ่มทำงาน
+- Speed: ประมาณ 1.5–2 it/s บน H200
+- Checkpoints: `outputs/phase1/checkpoint-100/`, `checkpoint-200/`, ...
 
-### Step 5: Run Phase 4 — Speech Output Alignment SFT [NEW]
-เทรนหัวเสียงพูดภาษาไทย เพื่อให้โมเดลตอบกลับเป็นเสียงสดเกือบเรียลไทม์ได้
-```bash
-python -m training.phase4_audio_output \
-    --config configs/phase4_audio_output.yaml \
-    --phase2_checkpoint outputs/phase2/phase2_final
-```
-*เก็บผลลัพธ์โมเดลแบบพูดได้ไว้ที่ `outputs/phase4/phase4_final/`*
+---
 
-และทดสอบอินเฟอเรนซ์เสียงพูดตอบกลับแบบเล่นสด (Real-time Stream):
-```bash
-python scripts/inference_stream.py \
-    --model_path outputs/phase4/phase4_final \
-    --audio_file sample.wav \
-    --stream
-```
+## 🦄 MoE Upgrade Path
 
-### Step 6: Push Model to Hugging Face Hub [NEW]
-เมื่อประมวลผลการเทรนเสร็จสิ้นเรียบร้อย สามารถอัปโหลดโมเดลขึ้น Hugging Face Hub ในโปรไฟล์ `Phonsiri` ได้ทันที:
-```bash
-python scripts/push_to_hub.py \
-    --local_path outputs/phase4/phase4_final \
-    --repo_name thai-omni-modal-0.8b \
-    --username Phonsiri
+รายละเอียดเต็มอยู่ใน [MoE.md](./MoE.md)
+
+```python
+# เปิดใช้หลัง Phase 1 เสร็จ (ก่อน Phase 2 SFT)
+from src.modeling_moe_adapter import convert_mlp_to_moe
+model = OmniModalModel.from_pretrained("outputs/phase1/best_phase1")
+model = convert_mlp_to_moe(model, num_experts=4, top_k=2)
 ```
 
 ---
 
+## 📊 Model Parameters
 
-## 🦄 MoE Upgrade (Optional)
-หากต้องการรันฝึกสอนในสถาปัตยกรรม MoE (Mixture of Experts) ที่มี **Agent Expert**:
-
-1. **สลับโมเดลเป็น MoE ในโค้ดเทรน**:
-เปิดใช้งานตัวแปลงในสคริปต์ SFT ก่อนรันการเทรน (ดูรายละเอียดสัดส่วนโมเดลได้ใน [MoE.md](file:///Users/phonsirithabunsri/Desktop/omni/MoE.md))
-```python
-from src.modeling_moe_adapter import convert_mlp_to_moe
-model = OmniModalModel.from_pretrained(phase1_path)
-model = convert_mlp_to_moe(model, num_experts=4, top_k=2) # 4 Experts, Top-2 Routing
-```
-2. **รันตรวจสอบโครงสร้าง MoE**:
-```bash
-python dry_run_moe.py
-```
+| Component | Parameters | Trainable Phase 1 |
+|-----------|-----------|-------------------|
+| Qwen3.5-0.8B LLM | ~890M | ❌ Frozen |
+| typhoon-whisper-turbo (Audio Encoder) | ~600M | ❌ Frozen |
+| AudioProjector MLP (1280→2048→1024) | **4.7M** | ✅ Training |
+| **Total Trainable** | **4.7M / 1,494M** | **0.32%** |

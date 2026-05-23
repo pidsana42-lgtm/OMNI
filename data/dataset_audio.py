@@ -75,8 +75,8 @@ class AudioTextDataset(Dataset):
                 split=hf_split,
                 trust_remote_code=True,
             )
-            # Cast audio column to standard format
-            raw = raw.cast_column(audio_column, HFAudio(sampling_rate=self.sample_rate))
+            # Do NOT cast_column with HFAudio — datasets 4.8.5 requires torchcodec.
+            # We decode audio manually in __getitem__ using soundfile instead.
             self.data = raw
             self.audio_col = audio_column
             self.text_col = text_column or self._detect_text_column(raw.column_names)
@@ -127,9 +127,18 @@ class AudioTextDataset(Dataset):
         if audio_val is not None:
             if isinstance(audio_val, dict):
                 if audio_val.get("array") is not None:
-                    waveform = audio_val["array"].astype(np.float32)
+                    # Already decoded (e.g. cast_column was used elsewhere)
+                    waveform = np.array(audio_val["array"], dtype=np.float32)
                     sr = audio_val.get("sampling_rate", self.sample_rate)
-                elif audio_val.get("path") is not None:
+                elif audio_val.get("bytes") is not None:
+                    # Raw encoded bytes (datasets 4.x without torchcodec)
+                    import io
+                    try:
+                        waveform, sr = sf.read(io.BytesIO(audio_val["bytes"]))
+                        waveform = waveform.astype(np.float32)
+                    except Exception:
+                        pass
+                if audio_val.get("path") is not None and waveform is None:
                     path_val = audio_val["path"]
             elif isinstance(audio_val, (str, Path)):
                 path_val = str(audio_val)
