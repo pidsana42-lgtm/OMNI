@@ -27,18 +27,47 @@ def convert_mlp_to_moe(
     preserving general language knowledge before fine-tuning starts.
     """
     # 1. Identify the transformer layers block inside LLM
-    # In Qwen3.5: model.llm.model.layers
-    # We navigate dynamically to handle wrappers
+    # We navigate dynamically to handle different wrappers (e.g. Qwen3.5, Qwen2-VL)
     llm_model = model
     if hasattr(model, "llm"):
         llm_model = model.llm
-    if hasattr(llm_model, "model"):
-        llm_model = llm_model.model
 
-    if not hasattr(llm_model, "layers"):
+    layers = None
+    # Try common candidate paths
+    for candidate_path in [
+        "model.layers",
+        "model.language_model.layers",
+        "language_model.model.layers",
+        "language_model.layers",
+        "layers"
+    ]:
+        curr = llm_model
+        parts = candidate_path.split(".")
+        found = True
+        for part in parts:
+            if hasattr(curr, part):
+                curr = getattr(curr, part)
+            else:
+                found = False
+                break
+        if found and (isinstance(curr, nn.ModuleList) or isinstance(curr, nn.Sequential)):
+            if len(curr) > 0 and hasattr(curr[0], "mlp"):
+                layers = curr
+                print(f"[MoE Adapter] Found layers block at: model.llm.{candidate_path}")
+                break
+
+    # Recursive fallback search
+    if layers is None:
+        for name, sub_mod in llm_model.named_modules():
+            if isinstance(sub_mod, nn.ModuleList):
+                if len(sub_mod) > 0 and hasattr(sub_mod[0], "mlp"):
+                    if "visual" not in name:
+                        layers = sub_mod
+                        print(f"[MoE Adapter] Found layers block dynamically at: model.llm.{name}")
+                        break
+
+    if layers is None:
         raise AttributeError("Cannot locate transformer layers in the model structure.")
-
-    layers = llm_model.layers
     num_layers = len(layers)
     target_layers = target_layers or list(range(num_layers))
 
