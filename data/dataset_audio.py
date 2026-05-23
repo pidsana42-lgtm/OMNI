@@ -81,16 +81,20 @@ class AudioTextDataset(Dataset):
                 split=hf_split,
                 trust_remote_code=True,
             )
-            # Cast audio column to a struct features dictionary instead of Audio to completely bypass Hugging Face
+            # Cast audio column to a plain struct features dictionary to completely bypass Hugging Face
             # audio decoding logic (which triggers torchcodec import and requirement).
             import datasets
             try:
-                struct_feat = datasets.Features({"bytes": datasets.Value("binary"), "path": datasets.Value("string")})
-                raw = raw.cast_column(audio_column, struct_feat)
+                new_features = raw.features.copy()
+                new_features[audio_column] = {"bytes": datasets.Value("binary"), "path": datasets.Value("string")}
+                raw = raw.cast(new_features)
                 print(f"[AudioDataset] Successfully cast {audio_column} to struct format to bypass torchcodec requirement.")
             except Exception as e:
                 print(f"[AudioDataset] Warning: failed to cast {audio_column} to struct. Falling back to HFAudio(decode=False). Error: {e}")
-                raw = raw.cast_column(audio_column, HFAudio(decode=False))
+                try:
+                    raw = raw.cast_column(audio_column, HFAudio(decode=False))
+                except Exception:
+                    pass
             self.data = raw
             self.audio_col = audio_column
             self.text_col = text_column or self._detect_text_column(raw.column_names)
