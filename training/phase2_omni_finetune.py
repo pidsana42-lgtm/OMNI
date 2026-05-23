@@ -21,6 +21,11 @@ Run:
 
 import os
 import sys
+# Block torchcodec to prevent Hugging Face datasets from attempting to load it
+# and crashing due to missing system FFmpeg libraries.
+sys.modules["torchcodec"] = None
+sys.modules["torchcodec.decoders"] = None
+
 import argparse
 from pathlib import Path
 

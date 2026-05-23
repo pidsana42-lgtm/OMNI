@@ -17,6 +17,12 @@ Supported sources (auto-detected):
 
 from __future__ import annotations
 
+import sys
+# Block torchcodec to prevent Hugging Face datasets from attempting to load it
+# and crashing due to missing system FFmpeg libraries.
+sys.modules["torchcodec"] = None
+sys.modules["torchcodec.decoders"] = None
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset

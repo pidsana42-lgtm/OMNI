@@ -10,8 +10,13 @@ Usage (on new cloud session):
 
 import argparse
 import os
-import subprocess
 import sys
+# Block torchcodec to prevent Hugging Face datasets from attempting to load it
+# and crashing due to missing system FFmpeg libraries.
+sys.modules["torchcodec"] = None
+sys.modules["torchcodec.decoders"] = None
+
+import subprocess
 from pathlib import Path
 
 
