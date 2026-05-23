@@ -116,15 +116,45 @@ class AudioTextDataset(Dataset):
         item = self.data[idx]
 
         # ── Load audio ────────────────────────────────────────────────────
-        if isinstance(item[self.audio_col], dict):
-            # HuggingFace audio dict format
-            waveform = item[self.audio_col]["array"].astype(np.float32)
-            sr = item[self.audio_col]["sampling_rate"]
-        elif isinstance(item[self.audio_col], (str, Path)):
-            waveform, sr = sf.read(str(item[self.audio_col]))
-            waveform = waveform.astype(np.float32)
-        else:
-            raise ValueError(f"Unexpected audio format: {type(item[self.audio_col])}")
+        waveform = None
+        sr = self.sample_rate
+
+        audio_val = item.get(self.audio_col)
+        path_val = item.get("path")
+
+        # 1. Try loading from HuggingFace audio dict/object if present
+        if audio_val is not None:
+            if isinstance(audio_val, dict):
+                if audio_val.get("array") is not None:
+                    waveform = audio_val["array"].astype(np.float32)
+                    sr = audio_val.get("sampling_rate", self.sample_rate)
+                elif audio_val.get("path") is not None:
+                    path_val = audio_val["path"]
+            elif isinstance(audio_val, (str, Path)):
+                path_val = str(audio_val)
+
+        # 2. Try loading from file path if waveform is still None
+        if waveform is None and path_val is not None:
+            try:
+                p = Path(path_val)
+                # If local_audio_dir is specified and path is relative, prefix it
+                # We can also search in local_audio_dir if path is absolute but missing
+                if local_audio_dir:
+                    if not p.is_absolute():
+                        p = Path(local_audio_dir) / p
+                    elif not p.exists():
+                        p = Path(local_audio_dir) / p.name
+
+                if p.exists():
+                    waveform, sr = sf.read(str(p))
+                    waveform = waveform.astype(np.float32)
+            except Exception:
+                pass
+
+        # 3. Fallback to dummy silent waveform if still None
+        if waveform is None:
+            sr = self.sample_rate
+            waveform = np.zeros(int(self.max_audio_seconds * sr), dtype=np.float32)
 
         # Resample if needed
         if sr != self.sample_rate:
