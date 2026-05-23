@@ -7,12 +7,12 @@ model:
   projector_layers: 2
 
 data:
-  # Mozilla Common Voice TH — มีไฟล์เสียงจริงอยู่ใน HF โดยตรง (ไม่ต้องโหลดจากดิสก์)
-  hf_dataset_name: "mozilla-foundation/common_voice_17_0"
-  hf_dataset_config: "th"
+  # Google FLEURS (Thai) — เปิดสาธารณะ 100%, เสียงจริงฝังใน HF, ไม่ต้อง accept terms
+  hf_dataset_name: "google/fleurs"
+  hf_dataset_config: "th_th"
   hf_split: "train"
   eval_split: "validation"
-  text_column: "sentence"   # คอลัมน์คำถอดเสียงของ Common Voice
+  text_column: "transcription"   # คอลัมน์ข้อความใน FLEURS
   max_audio_seconds: 30.0
   max_text_length: 256
 
@@ -25,13 +25,13 @@ training:
   weight_decay: 0.01
   max_grad_norm: 1.0
   warmup_ratio: 0.05
-  num_workers: 8
-  save_steps: 500
+  num_workers: 4
+  save_steps: 250
   output_dir: "outputs/phase1"
   
-  # Dataset size limits — Common Voice TH มีประมาณ 2,000 train samples
-  max_train_samples: 2000
-  max_eval_samples: 200
+  # FLEURS TH มีประมาณ 3,000 train samples, ใช้ทั้งหมดเลย
+  max_train_samples: 3000
+  max_eval_samples: 500
 
   # Automatic Hugging Face Hub synchronization
   push_to_hub: true
