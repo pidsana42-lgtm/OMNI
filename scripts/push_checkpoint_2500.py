@@ -30,10 +30,15 @@ def main():
 
     print(f"[1/4] Initializing model and accelerator...")
     accelerator = Accelerator()
-    config = OmniConfig.from_pretrained("Qwen/Qwen3.5-0.8B")
+    config = OmniConfig(
+        llm_model_name="Qwen/Qwen3.5-0.8B",
+        audio_encoder_name="typhoon-ai/typhoon-whisper-turbo",
+        projector_hidden_size=2048,
+        projector_num_layers=2,
+    )
     processor = OmniProcessor.from_pretrained(
-        "Qwen/Qwen3.5-0.8B",
-        audio_encoder_id="typhoon-ai/typhoon-whisper-turbo",
+        llm_name="Qwen/Qwen3.5-0.8B",
+        audio_encoder_name="typhoon-ai/typhoon-whisper-turbo",
     )
     model = OmniModalModel(config)
     model = accelerator.prepare(model)
