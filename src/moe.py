@@ -86,7 +86,8 @@ class SparseMoELayer(nn.Module):
             # Get respective weights: top_weights[token_index, k_position]
             expert_weights = top_weights[token_indices, k_positions].unsqueeze(-1)
 
-            # Accumulate scaled outputs
-            final_output.index_add_(0, token_indices, expert_outputs * expert_weights)
+            # Accumulate scaled outputs, ensuring the dtype matches final_output
+            scaled_outputs = (expert_outputs * expert_weights).to(final_output.dtype)
+            final_output.index_add_(0, token_indices, scaled_outputs)
 
         return final_output.view(orig_shape)
