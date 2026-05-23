@@ -10,7 +10,8 @@ data:
   # Primary: Typhoon Audio Preview Data (ASR & Multimodal Thai)
   hf_dataset_name: "typhoon-ai/typhoon-audio-preview-data"
   hf_dataset_config: null
-  eval_split: "test"
+  hf_split: "pretrained"
+  eval_split: "sft"
   max_audio_seconds: 30.0
   max_text_length: 256
 

@@ -17,7 +17,7 @@ data:
     # Large-scale Typhoon Audio preview data
     hf_dataset_name: "typhoon-ai/typhoon-audio-preview-data"
     hf_dataset_config: null
-    hf_split: "train"
+    hf_split: "sft"
 
   text:
     # High-quality Thai instruction tuning dataset from Typhoon

@@ -26,11 +26,11 @@ def main():
     # Phase 1 & 2: Audio Dataset
     download_dataset(
         name="typhoon-ai/typhoon-audio-preview-data",
-        split="train"
+        split="pretrained"
     )
     download_dataset(
         name="typhoon-ai/typhoon-audio-preview-data",
-        split="test"
+        split="sft"
     )
 
     # Phase 2: Text Instruct Dataset

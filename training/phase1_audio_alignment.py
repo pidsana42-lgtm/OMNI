@@ -93,7 +93,7 @@ def main():
         processor=processor,
         hf_dataset_name=cfg.data.hf_dataset_name,
         hf_dataset_config=cfg.data.get("hf_dataset_config", None),
-        hf_split="train",
+        hf_split=cfg.data.get("hf_split", "train"),
         max_audio_seconds=cfg.data.max_audio_seconds,
         max_text_length=cfg.data.max_text_length,
     )
