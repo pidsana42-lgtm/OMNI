@@ -1,0 +1,29 @@
+# Phase 3: Knowledge Distillation
+# ─────────────────────────────────────────────
+model:
+  # Student model for streaming inference
+  student_model: "typhoon-ai/typhoon-asr-realtime"
+
+data:
+  hf_dataset_name: "mozilla-foundation/common_voice_17_0"
+  hf_dataset_config: "th"
+  max_audio_seconds: 30.0
+  max_text_length: 256
+
+training:
+  num_epochs: 2
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  lr: 5.0e-5
+  max_grad_norm: 1.0
+  warmup_ratio: 0.05
+  num_workers: 4
+  kl_weight: 0.5         # Balance between KL (teacher) and CE (labels)
+  temperature: 4.0       # Distillation temperature
+  save_steps: 500
+  output_dir: "outputs/phase3"
+
+logging:
+  use_wandb: true
+  wandb_project: "thai-omni-modal"
+  log_every: 50

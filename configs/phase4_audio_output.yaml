@@ -1,0 +1,40 @@
+# Phase 4 Configuration: Speech Output Alignment SFT
+
+model:
+  audio_codebook_size: 1024       # EnCodec 24kHz codebook vocab size
+  audio_num_codebooks: 1          # Predict 1 primary codebook for fast training
+  audio_codec_bandwidth: 6.0      # 6.0 kbps bandwidth model
+  enable_audio_output: true
+
+data:
+  # To train with local JSONL file manifest, uncomment:
+  # manifest_file: "data/manifests/audio_output_train.jsonl"
+  
+  # Train directly on Typhoon TTS Resynthesized Dataset:
+  hf_dataset_name: "typhoon-ai/tts_arena_resynthesized"
+  hf_dataset_config: null
+  hf_split: "train"
+  target_audio_column: "audio"
+  prompt_text_column: "text"
+  
+  max_prompt_length: 512
+  max_target_seconds: 10.0        # Max 10 seconds of target audio response
+  system_prompt: "คุณเป็น AI ผู้ช่วยภาษาไทยที่ตอบด้วยเสียงพูดภาษาไทยที่ชัดเจนและเป็นธรรมชาติ"
+
+training:
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  num_workers: 4
+  lr: 2e-4                        # Higher learning rate is fine for training a lightweight head
+  weight_decay: 0.01
+  warmup_ratio: 0.08
+  max_grad_norm: 1.0
+  save_steps: 5
+  output_dir: "outputs/phase4"
+
+logging:
+  use_wandb: true
+  wandb_project: "thai-omni-modal"
+  run_name: "phase4-audio-output-alignment"
+  log_every: 5
