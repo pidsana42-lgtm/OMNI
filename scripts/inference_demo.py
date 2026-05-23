@@ -165,17 +165,16 @@ def run_inference(args):
     print("[Demo] Generating response...")
     print("=" * 60)
 
-    # Retrieve bad words ids to prevent thinking loops if model is not fully SFT aligned yet
     tokenizer = processor.tokenizer
-    think_end_tokens = tokenizer.convert_tokens_to_ids(["</think>", "<|/think|>"])
-    think_end_tokens = [t for t in think_end_tokens if t is not None and t != tokenizer.unk_token_id]
-    stop_ids = [processor.eos_token_id] + think_end_tokens
+    # ── Stop only at EOS — do NOT add </think> as a stop token.
+    # When </think> is a stop token, an under-trained Phase-1 projector that
+    # never learns to emit </think> causes infinite " herethink>" loops.
+    # We handle thinking removal in post-processing (strip_thinking) instead.
+    stop_ids = [processor.eos_token_id]
 
-    # We DO NOT use suppress_tokens here.
-    # If we block the <think> token, reasoning models will try to spell it out using raw text tokens
-    # (e.g. " here" + "think" + ">") which causes infinite loops.
-    # Instead, we let it output the <think> block naturally, and then strip it using regex later.
-    suppress_tokens = None
+    # repetition_penalty breaks "herethink> herethink>" infinite loops
+    # without blocking any specific token IDs.
+    REPETITION_PENALTY = 1.3
 
     # Use model.llm.generate for text generation
     with torch.autocast(args.device, dtype=torch.bfloat16):
@@ -198,7 +197,7 @@ def run_inference(args):
                 do_sample=False,
                 pad_token_id=processor.pad_token_id,
                 eos_token_id=stop_ids,
-                suppress_tokens=suppress_tokens if suppress_tokens else None,
+                repetition_penalty=REPETITION_PENALTY,
             )
             new_tokens = generated[0]
         else:
@@ -211,14 +210,22 @@ def run_inference(args):
                 do_sample=False,
                 pad_token_id=processor.pad_token_id,
                 eos_token_id=stop_ids,
-                suppress_tokens=suppress_tokens if suppress_tokens else None,
+                repetition_penalty=REPETITION_PENALTY,
             )
             new_tokens = generated[0][input_ids.shape[1]:]
 
     import re
     def strip_thinking(text: str) -> str:
+        # 1. Remove proper <think>...</think> blocks (special token path)
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        # 2. Remove orphaned tags
         text = text.replace("</think>", "").replace("<think>", "")
+        # 3. Remove text-level "herethink>" pattern — happens when the LLM
+        #    tries to spell out <think> using normal BPE tokens after the
+        #    projector is not yet well-aligned (common early in Phase 1).
+        text = re.sub(r'(\s*\w*think>\s*)+', ' ', text, flags=re.IGNORECASE)
+        # 4. Remove any leftover standalone think tokens
+        text = re.sub(r'\bthink\b', '', text, flags=re.IGNORECASE)
         return text.strip()
 
     response = strip_thinking(processor.decode(new_tokens))
