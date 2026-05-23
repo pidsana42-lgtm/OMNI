@@ -259,6 +259,17 @@ def main():
                 processor.save_pretrained(str(hf_ckpt_path))
                 print(f"[Phase1] ✅ Saved HF model weights at step {global_step} to {hf_ckpt_path}")
 
+                # Copy accelerator state files (optimizer, scheduler, etc.) into the HF checkpoint directory
+                import shutil
+                for file_path in ckpt_path.glob("*"):
+                    dest_file = hf_ckpt_path / file_path.name
+                    if not dest_file.exists():
+                        if file_path.is_dir():
+                            shutil.copytree(file_path, dest_file)
+                        else:
+                            shutil.copy(file_path, dest_file)
+                print(f"[Phase1] ✅ Bundled optimizer and scheduler states into {hf_ckpt_path}")
+
                 # Push this step checkpoint to Hugging Face Hub
                 if cfg.training.get("push_to_hub", False):
                     try:
