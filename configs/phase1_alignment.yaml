@@ -17,16 +17,25 @@ data:
 
 training:
   num_epochs: 3
-  batch_size: 8
-  eval_batch_size: 16
-  gradient_accumulation_steps: 4   # effective batch = 32
-  lr: 1.0e-3                       # High LR for projector-only training
+  batch_size: 4                     # Reduced from 8 to 4 to prevent CUDA OOM
+  eval_batch_size: 8                # Reduced from 16 to 8 to prevent CUDA OOM
+  gradient_accumulation_steps: 8    # Increased from 4 to 8 (effective batch size remains 32)
+  lr: 1.0e-3                        # High LR for projector-only training
   weight_decay: 0.01
   max_grad_norm: 1.0
   warmup_ratio: 0.05
   num_workers: 8
   save_steps: 500
   output_dir: "outputs/phase1"
+  
+  # Dataset size limits to speed up Phase 1 and prevent cloud time exhaustion
+  max_train_samples: 30000
+  max_eval_samples: 500
+
+  # Automatic Hugging Face Hub synchronization
+  push_to_hub: true
+  hub_model_id: "thai-omni-modal-0.8b-phase1"
+  hub_private: true
 
 logging:
   use_wandb: true

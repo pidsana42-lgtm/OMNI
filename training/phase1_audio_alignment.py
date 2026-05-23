@@ -84,6 +84,11 @@ def main():
     model.llm.resize_token_embeddings(len(processor.tokenizer))
     print(f"[Phase1] Resized embeddings to {len(processor.tokenizer):,} tokens")
 
+    # Enable gradient checkpointing to save VRAM
+    if hasattr(model.llm, "gradient_checkpointing_enable"):
+        model.llm.gradient_checkpointing_enable()
+        print("[Phase1] Enabled gradient checkpointing on LLM backbone")
+
     # ── Setup Phase 1 freeze strategy ────────────────────────────────────
     model.setup_phase1()
     model.print_trainable_parameters()
@@ -108,6 +113,24 @@ def main():
         max_audio_seconds=cfg.data.max_audio_seconds,
         max_text_length=cfg.data.max_text_length,
     )
+
+    # Subsample if requested to prevent cloud timeout and speed up Phase 1
+    import random
+    max_train_samples = cfg.training.get("max_train_samples", None)
+    if max_train_samples is not None:
+        max_train_samples = min(len(train_dataset), max_train_samples)
+        indices = list(range(len(train_dataset)))
+        random.Random(42).shuffle(indices)
+        train_dataset = torch.utils.data.Subset(train_dataset, indices[:max_train_samples])
+        print(f"[Phase1] Subsampled train dataset to {max_train_samples:,} samples")
+
+    max_eval_samples = cfg.training.get("max_eval_samples", None)
+    if max_eval_samples is not None:
+        max_eval_samples = min(len(eval_dataset), max_eval_samples)
+        indices = list(range(len(eval_dataset)))
+        random.Random(42).shuffle(indices)
+        eval_dataset = torch.utils.data.Subset(eval_dataset, indices[:max_eval_samples])
+        print(f"[Phase1] Subsampled eval dataset to {max_eval_samples:,} samples")
 
     collator = OmniDataCollator(processor=processor)
 
@@ -226,12 +249,34 @@ def main():
                 processor.save_pretrained(str(best_path))
                 print(f"[Phase1] 🏆 New best! Saved to {best_path}")
 
+                if cfg.training.get("push_to_hub", False):
+                    try:
+                        from scripts.push_to_hub import push_to_hub_direct
+                        push_to_hub_direct(
+                            local_path=str(best_path),
+                            repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase1"),
+                            private=cfg.training.get("hub_private", True),
+                        )
+                    except Exception as e:
+                        print(f"[Phase1] HF push failed: {e}")
+
     # ── Final save ────────────────────────────────────────────────────────
     if accelerator.is_main_process:
         final_path = output_dir / "phase1_final"
         accelerator.unwrap_model(model).save_pretrained(str(final_path))
         processor.save_pretrained(str(final_path))
         print(f"\n[Phase1] ✅ Training complete! Final model at {final_path}")
+
+        if cfg.training.get("push_to_hub", False):
+            try:
+                from scripts.push_to_hub import push_to_hub_direct
+                push_to_hub_direct(
+                    local_path=str(final_path),
+                    repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase1"),
+                    private=cfg.training.get("hub_private", True),
+                )
+            except Exception as e:
+                print(f"[Phase1] HF push failed: {e}")
 
     if cfg.logging.use_wandb and accelerator.is_main_process:
         wandb.finish()
