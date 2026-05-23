@@ -38,6 +38,23 @@ from src import OmniConfig, OmniModalModel, OmniProcessor
 from data import AudioTextDataset, OmniDataCollator
 
 
+def dynamic_push_to_hub(local_path: str, repo_name: str, private: bool = True):
+    import importlib.util
+    from pathlib import Path
+    project_root = Path(__file__).parent.parent
+    push_to_hub_path = project_root / "scripts" / "push_to_hub.py"
+    if not push_to_hub_path.exists():
+        raise FileNotFoundError(f"Could not find push_to_hub.py at {push_to_hub_path}")
+    spec = importlib.util.spec_from_file_location("push_to_hub_dynamic", str(push_to_hub_path))
+    push_to_hub_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(push_to_hub_module)
+    push_to_hub_module.push_to_hub_direct(
+        local_path=local_path,
+        repo_name=repo_name,
+        private=private,
+    )
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/phase1_alignment.yaml")
@@ -245,8 +262,7 @@ def main():
                 # Push this step checkpoint to Hugging Face Hub
                 if cfg.training.get("push_to_hub", False):
                     try:
-                        from scripts.push_to_hub import push_to_hub_direct
-                        push_to_hub_direct(
+                        dynamic_push_to_hub(
                             local_path=str(hf_ckpt_path),
                             repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase1"),
                             private=cfg.training.get("hub_private", True),
@@ -284,8 +300,7 @@ def main():
 
                 if cfg.training.get("push_to_hub", False):
                     try:
-                        from scripts.push_to_hub import push_to_hub_direct
-                        push_to_hub_direct(
+                        dynamic_push_to_hub(
                             local_path=str(best_path),
                             repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase1"),
                             private=cfg.training.get("hub_private", True),
@@ -302,8 +317,7 @@ def main():
 
         if cfg.training.get("push_to_hub", False):
             try:
-                from scripts.push_to_hub import push_to_hub_direct
-                push_to_hub_direct(
+                dynamic_push_to_hub(
                     local_path=str(final_path),
                     repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase1"),
                     private=cfg.training.get("hub_private", True),
