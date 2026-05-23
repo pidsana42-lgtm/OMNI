@@ -469,26 +469,3 @@ class OmniModalModel(nn.Module):
         )
 
 
-    @classmethod
-    def from_pretrained(cls, load_directory: str):
-        """Load all components from disk."""
-        import os
-        config = OmniConfig.from_pretrained(load_directory)
-        model = cls(config)
-        model.audio_projector.load_state_dict(
-            torch.load(os.path.join(load_directory, "audio_projector.pt"), weights_only=True)
-        )
-        model.audio_encoder.load_state_dict(
-            torch.load(os.path.join(load_directory, "audio_encoder.pt"), weights_only=True)
-        )
-        print(f"[OmniModal] ✅ Loaded from {load_directory}")
-        return model
-
-    def print_trainable_parameters(self):
-        trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        total = sum(p.numel() for p in self.parameters())
-        print(
-            f"Trainable params: {trainable:,} || "
-            f"All params: {total:,} || "
-            f"Trainable%: {100 * trainable / total:.4f}%"
-        )
