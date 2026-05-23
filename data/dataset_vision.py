@@ -73,12 +73,24 @@ class VisionTextDataset(Dataset):
             return image_data.convert("RGB")
         elif isinstance(image_data, bytes):
             return Image.open(io.BytesIO(image_data)).convert("RGB")
+        elif isinstance(image_data, str):
+            # LLaVA-style: image column is a file path string (e.g. "coco/train2014/...")
+            # Try as local path; if unavailable return a blank placeholder so training
+            # continues without crashing.
+            try:
+                return Image.open(image_data).convert("RGB")
+            except Exception:
+                # Return a neutral 224×224 white image as placeholder
+                return Image.new("RGB", (224, 224), color=(255, 255, 255))
         elif isinstance(image_data, dict):
             # HF format: {'bytes': b'...', 'path': '...'}
             if "bytes" in image_data and image_data["bytes"]:
                 return Image.open(io.BytesIO(image_data["bytes"])).convert("RGB")
             elif "path" in image_data and image_data["path"]:
-                return Image.open(image_data["path"]).convert("RGB")
+                try:
+                    return Image.open(image_data["path"]).convert("RGB")
+                except Exception:
+                    return Image.new("RGB", (224, 224), color=(255, 255, 255))
         raise ValueError(f"Cannot load image from: {type(image_data)}")
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
@@ -107,7 +119,19 @@ class VisionTextDataset(Dataset):
                     answer = value
         else:
             question = str(item.get(self.question_col, "อธิบายภาพนี้"))
-            answer = str(item.get(self.answer_col, "")) if self.answer_col else ""
+            ans_val = None
+            if self.answer_col and self.answer_col in item:
+                ans_val = item[self.answer_col]
+            else:
+                for possible_col in ["sentences_raw", "th_sentences_raw", "caption", "sentences"]:
+                    if possible_col in item:
+                        ans_val = item[possible_col]
+                        break
+            
+            if isinstance(ans_val, list):
+                answer = str(ans_val[0]) if len(ans_val) > 0 else ""
+            else:
+                answer = str(ans_val) if ans_val is not None else ""
 
         # ── Build message with image ──────────────────────────────────────
         messages = [

@@ -40,8 +40,9 @@ def precache_datasets(token: str):
         # (name, config, split, description)
         ("google/fleurs",              "th_th",  "train",      "FLEURS Thai (audio)"),
         ("google/fleurs",              "th_th",  "validation", "FLEURS Thai (audio eval)"),
+        ("typhoon-ai/chatbot-arena-spoken-voices", None, "train", "Typhoon Spoken Voices"),
         ("mlabonne/FineTome-100k",     None,     "train",      "FineTome text instruction"),
-        ("liuhaotian/LLaVA-Instruct-150K", None, "train",     "LLaVA vision instruction"),
+        ("patomp/thai-mscoco-2014-captions", None, "train",    "Thai MSCOCO image captions"),
     ]
 
     for ds_name, config, split, desc in datasets_to_cache:
@@ -54,7 +55,7 @@ def precache_datasets(token: str):
                 ds = load_dataset(ds_name, **kwargs)
 
             # For audio datasets, disable auto-decode to avoid torchcodec
-            if ds_name == "google/fleurs":
+            if ds_name in ["google/fleurs", "typhoon-ai/chatbot-arena-spoken-voices"]:
                 ds = ds.cast_column("audio", HFAudio(decode=False))
 
             print(f"   ✅ {len(ds):,} samples cached.")

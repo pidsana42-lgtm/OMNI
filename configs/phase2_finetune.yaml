@@ -13,12 +13,14 @@ data:
   max_audio_seconds: 30.0
   max_text_length: 1024
 
-  audio:
-    # Google FLEURS TH — เสียงจริงฝังใน HF (แก้แล้วจาก Phase 1)
-    hf_dataset_name: "google/fleurs"
-    hf_dataset_config: "th_th"
-    hf_split: "train"
-    text_column: "transcription"
+  audio_datasets:
+    - hf_dataset_name: "google/fleurs"
+      hf_dataset_config: "th_th"
+      hf_split: "train"
+      text_column: "transcription"
+    - hf_dataset_name: "typhoon-ai/chatbot-arena-spoken-voices"
+      hf_split: "train"
+      text_column: "response"
 
   text:
     # FineTome — high-quality instruction dataset, ไม่ต้อง login
@@ -26,11 +28,9 @@ data:
     hf_split: "train"
 
   vision:
-    # LLaVA Instruct — load only llava_instruct_150k.json to avoid schema
-    # mismatch with llava_v1_5_mix665k.json (which adds an extra 'model' column)
-    hf_dataset_name: "liuhaotian/LLaVA-Instruct-150K"
+    # Thai MSCOCO Captions — contains real images + Thai captions!
+    hf_dataset_name: "patomp/thai-mscoco-2014-captions"
     hf_split: "train"
-    data_files: "llava_instruct_150k.json"
     colpali_mode: false
 
 training:

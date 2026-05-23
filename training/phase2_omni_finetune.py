@@ -105,14 +105,34 @@ def main():
     # ── Datasets ──────────────────────────────────────────────────────────
     print("[Phase2] Loading interleaved datasets...")
 
-    audio_ds = AudioTextDataset(
-        processor=processor,
-        hf_dataset_name=cfg.data.audio.hf_dataset_name,
-        hf_dataset_config=cfg.data.audio.get("hf_dataset_config"),
-        hf_split=cfg.data.audio.get("hf_split", "train"),
-        text_column=cfg.data.audio.get("text_column"),
-        max_audio_seconds=cfg.data.max_audio_seconds,
-    )
+    audio_ds_list = []
+    if "audio_datasets" in cfg.data:
+        for audio_cfg in cfg.data.audio_datasets:
+            ds = AudioTextDataset(
+                processor=processor,
+                hf_dataset_name=audio_cfg.hf_dataset_name,
+                hf_dataset_config=audio_cfg.get("hf_dataset_config"),
+                hf_split=audio_cfg.get("hf_split", "train"),
+                text_column=audio_cfg.get("text_column"),
+                max_audio_seconds=cfg.data.max_audio_seconds,
+            )
+            audio_ds_list.append(ds)
+    elif "audio" in cfg.data:
+        ds = AudioTextDataset(
+            processor=processor,
+            hf_dataset_name=cfg.data.audio.hf_dataset_name,
+            hf_dataset_config=cfg.data.audio.get("hf_dataset_config"),
+            hf_split=cfg.data.audio.get("hf_split", "train"),
+            text_column=cfg.data.audio.get("text_column"),
+            max_audio_seconds=cfg.data.max_audio_seconds,
+        )
+        audio_ds_list.append(ds)
+
+    if len(audio_ds_list) == 1:
+        audio_ds = audio_ds_list[0]
+    else:
+        from torch.utils.data import ConcatDataset
+        audio_ds = ConcatDataset(audio_ds_list)
 
     text_ds = TextOnlyDataset(
         processor=processor,
