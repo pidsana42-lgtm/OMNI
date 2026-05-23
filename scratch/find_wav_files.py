@@ -2,9 +2,15 @@ import os
 from pathlib import Path
 
 def find_wav_files():
-    search_paths = ["/teamspace", "/home", "/workspace2"]
-    found_any = False
+    import os
+    search_paths = [
+        os.path.expanduser("~/.cache/huggingface"),
+        "/teamspace",
+        "/home",
+        "/workspace2"
+    ]
     
+    found_any = False
     print("Searching for any .wav files in common directories...")
     for p in search_paths:
         path = Path(p)
