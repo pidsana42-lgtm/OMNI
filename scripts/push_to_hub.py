@@ -51,6 +51,56 @@ def parse_args():
     return parser.parse_args()
 
 
+def prepare_custom_model_code(local_dir: Path):
+    import shutil
+    import json
+
+    src_dir = Path(__file__).parent.parent / "src"
+    if not src_dir.exists():
+        print(f"[HF Hub] Warning: 'src' directory not found at {src_dir}. Skipping code copying.")
+        return
+
+    print(f"[HF Hub] Copying custom model code files from {src_dir} to {local_dir}...")
+    for py_file in src_dir.glob("*.py"):
+        shutil.copy(py_file, local_dir / py_file.name)
+
+    # Update config.json with auto_map
+    config_json_path = local_dir / "config.json"
+    if config_json_path.exists():
+        try:
+            with open(config_json_path, "r") as f:
+                config_data = json.load(f)
+
+            config_data["auto_map"] = {
+                "AutoConfig": "configuration_omni.OmniConfig",
+                "AutoModel": "modeling_omni.OmniModalModel",
+                "AutoModelForCausalLM": "modeling_omni.OmniModalModel"
+            }
+
+            with open(config_json_path, "w") as f:
+                json.dump(config_data, f, indent=2)
+            print("[HF Hub]   ✅ Injected AutoModel auto_map into config.json")
+        except Exception as e:
+            print(f"[HF Hub]   ❌ Failed to update config.json: {e}")
+
+    # Update preprocessor_config.json with auto_map
+    preprocessor_config_path = local_dir / "preprocessor_config.json"
+    if preprocessor_config_path.exists():
+        try:
+            with open(preprocessor_config_path, "r") as f:
+                prep_data = json.load(f)
+
+            prep_data["auto_map"] = {
+                "AutoProcessor": "processing_omni.OmniProcessor"
+            }
+
+            with open(preprocessor_config_path, "w") as f:
+                json.dump(prep_data, f, indent=2)
+            print("[HF Hub]   ✅ Injected AutoProcessor auto_map into preprocessor_config.json")
+        except Exception as e:
+            print(f"[HF Hub]   ❌ Failed to update preprocessor_config.json: {e}")
+
+
 def main():
     args = parse_args()
     local_dir = Path(args.local_path)
@@ -58,6 +108,9 @@ def main():
     if not local_dir.exists():
         print(f"[Error] Local path '{local_dir}' does not exist.")
         return
+
+    # Automatically prepare checkpoint with custom architecture code and auto_map configurations
+    prepare_custom_model_code(local_dir)
 
     repo_id = f"{args.username}/{args.repo_name}"
     print(f"[HF Hub] Preparing to push {local_dir} to {repo_id}...")

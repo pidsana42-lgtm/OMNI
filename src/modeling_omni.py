@@ -353,7 +353,10 @@ class OmniModalModel(nn.Module):
 
     def _get_embed_tokens(self):
         """Retrieve Qwen's token embedding layer regardless of model structure."""
-        # Try standard locations in Qwen3.5 structure
+        if hasattr(self.llm, "get_input_embeddings"):
+            return self.llm.get_input_embeddings()
+
+        # Try standard locations in Qwen3.5 structure as fallback
         if hasattr(self.llm, "model") and hasattr(self.llm.model, "embed_tokens"):
             return self.llm.model.embed_tokens
         if hasattr(self.llm, "language_model") and hasattr(
