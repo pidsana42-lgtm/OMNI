@@ -1,24 +1,22 @@
-# Thai Omni-Modal AI — Project Status & Run Manifest
-Last Updated: 2026-05-23 (Phase 1 Real Audio Training — In Progress)
-
-## 📌 Current Status: Phase 1 Re-Training with Real Audio
+## 📌 Current Status: Transitioning to Phase 2 SFT (New GPU Session)
 
 ### ✅ Completed
+- **Phase 1 Audio Alignment**: Completed/Nearing completion on the cloud. Trains on real Thai speech using `google/fleurs` (th_th) to align speech features with the LLM. Checkpoint pushed/saved to HF (`thai-omni-modal-0.8b-phase1`).
 - **Dense Architecture & Pipeline**: Verified. (`python dry_run.py` → 6/6 Passed)
 - **MoE Architecture & Adapter**: Verified. (`python dry_run_moe.py` → 3/3 Passed)
 - **Token Setup**: Special audio tokens added to tokenizer (`outputs/tokenizer_setup/`)
-- **HF Hub Sync**: `scripts/push_to_hub.py` ready; model auto-syncs every `save_steps`
+- **HF Hub Sync**: Model auto-syncs every `save_steps` during training runs.
+- **Multi-modality Fixes**: Avoided `torchcodec` dependency issues by implementing manual audio bytes decoding via `soundfile/io.BytesIO` and setting `Audio(decode=False)` in dataset mapping.
 
-### 🔄 In Progress
-- **Phase 1 Audio Alignment** — Re-training from scratch on **real Thai speech**
-  - Dataset: `google/fleurs` (th_th) — เสียงไทยจริง ฝังอยู่ใน HF โดยตรง ✅
-  - Dataset เก่า (`typhoon-ai/typhoon-audio-preview-data`) มีแค่ path strings ชี้ไฟล์บนเซิร์ฟเวอร์ SCB-10X ❌
-  - ผล: 3,500 steps แรกเทรนกับเสียงเงียบ (Silence/Zeros) ทั้งหมด → ล้างทิ้ง เริ่มใหม่
-  - Training config: `configs/phase1_alignment.yaml`
-  - Checkpoint dir: `outputs/phase1/` (save every 100 steps)
+### 🔄 In Progress / Starting Next
+- **Phase 2 SFT (Interleaved Audio + Vision + Text)**: Ready to run on a new GPU/session.
+  - Setup script `scripts/start_phase2.py` fully configured.
+  - Datasets updated to stable public endpoints:
+    - **Audio**: `google/fleurs` th_th (voice data cached with manual decoding) or candidate `typhoon-ai/chatbot-arena-spoken-voices` (real spoken arena dataset).
+    - **Text**: `mlabonne/FineTome-100k` (high quality conversations, bypasses permission locks).
+    - **Vision**: `liuhaotian/LLaVA-Instruct-150K` (public multi-modal instructions).
 
 ### ⏳ Pending
-- **Phase 2**: Omni SFT (Audio + Vision + Text) — รอ Phase 1 เสร็จ
 - **Phase 3**: Distillation → Streaming Head
 - **Phase 4**: Native Speech Output (AudioLMHead)
 - **MoE Conversion**: Dense → 4-Expert MoE (Phase 2 SFT)
@@ -29,11 +27,12 @@ Last Updated: 2026-05-23 (Phase 1 Real Audio Training — In Progress)
 
 | Bug | ไฟล์ | สถานะ |
 |-----|------|--------|
-| `local_audio_dir` ไม่ถูก save เป็น `self.local_audio_dir` → NameError ถูก swallow โดย try/except → fallback เสียงเงียบ | `data/dataset_audio.py` | ✅ Fixed |
+| `ImportError: To support decoding audio data, please install 'torchcodec'` | `data/dataset_audio.py` | ✅ Fixed (Use `HFAudio(decode=False)` and decode using `soundfile/BytesIO`) |
+| `local_audio_dir` ไม่ถูก save เป็น `self.local_audio_dir` → NameError | `data/dataset_audio.py` | ✅ Fixed |
 | `_get_embed_tokens()` หา embed_tokens ใน LLM ไม่เจอ | `src/modeling_omni.py` | ✅ Fixed |
 | `OmniConfig` ไม่มี `enable_audio_output` attribute | `src/configuration_omni.py` | ✅ Fixed |
 | `Qwen2Tokenizer` ไม่มี `additional_special_tokens` attribute | `src/processing_omni.py` | ✅ Fixed |
-| Dataset `typhoon-audio-preview-data` มีแค่ path strings ไม่มีเสียงจริง | `configs/phase1_alignment.yaml` | ✅ Fixed (switched to FLEURS) |
+| Dataset `typhoon-audio-preview-data` มีแค่ path strings ไม่มีเสียงจริง | `configs/phase1_alignment.yaml` | ✅ Fixed (switched to FLEURS / Spoken-Voices) |
 | CUDA OOM ที่ batch_size=8 | `configs/phase1_alignment.yaml` | ✅ Fixed (batch=4, grad_accum=8) |
 
 ---
@@ -49,8 +48,8 @@ omni/
 ├── requirements.txt              # แพ็คเกจที่ต้องติดตั้ง
 │
 ├── configs/
-│   ├── phase1_alignment.yaml     # ✅ ใช้งานอยู่ — FLEURS th_th, save_steps=100
-│   ├── phase2_finetune.yaml      # SFT รวม 3 Modalities
+│   ├── phase1_alignment.yaml     # FLEURS th_th, save_steps=100
+│   ├── phase2_finetune.yaml      # ✅ ใช้งานอยู่ — FLEURS th_th + FineTome + LLaVA
 │   ├── phase3_distillation.yaml  # Distill → Streaming Head
 │   └── phase4_audio_output.yaml  # Native Speech Output (AudioLMHead)
 │
@@ -65,29 +64,32 @@ omni/
 │
 ├── data/
 │   ├── collator.py               # OmniDataCollator (mixed-modality padding)
-│   ├── dataset_audio.py          # AudioTextDataset (local_audio_dir bug fixed ✅)
-│   ├── dataset_vision.py         # Vision / ColPali
+│   ├── dataset_audio.py          # AudioTextDataset (fixed decode=False, no torchcodec ✅)
+│   ├── dataset_vision.py         # Vision / LLaVA loading
 │   ├── dataset_agent.py          # Agent Tool-use
 │   ├── dataset_omni.py           # Mixed SFT (Audio 35%, Text 35%, Vision 30%)
 │   └── dataset_audio_output.py   # Phase 4 speech pairs
 │
 ├── training/
-│   ├── phase1_audio_alignment.py # ✅ ใช้งานอยู่ (gradient checkpointing, hub push)
+│   ├── phase1_audio_alignment.py # AudioProjector alignment
 │   ├── phase2_omni_finetune.py   # LLM + Projector SFT
 │   ├── phase3_distillation.py    # Streaming head distillation
 │   └── phase4_audio_output.py    # AudioLMHead training
 │
 └── scripts/
     ├── setup_tokens.py           # เพิ่ม audio special tokens (รันครั้งเดียว) ✅ Done
+    ├── start_phase2.py           # ✅ ใช้งานอยู่ — สคริปต์สปินเซสชันใหม่ ดึงโมเดล+เทส+เทรนต่อ
     ├── download_datasets.py      # Pre-cache HF datasets
     ├── inference_demo.py         # ทดสอบ inference (--test_dataset flag)
-    ├── push_to_hub.py            # Push model → HF Hub (Phonsiri account)
+    ├── push_to_hub.py            # Push model → HF Hub
     └── login_hf.py               # HF + W&B login
 ```
 
 ---
 
-## 🚀 Quick Start (Lightning AI)
+## 🚀 Quick Start Phase 2 (บน GPU/Session ใหม่)
+
+หากจะสลับไปรันบน GPU เครื่องใหม่ ให้ใช้คำสั่งนี้เพื่อดาวน์โหลด checkpoint ล่าสุดมาทดสอบและรันต่อเนื่องได้ทันที:
 
 ```bash
 # 1. Clone & install
@@ -95,15 +97,10 @@ git clone https://github.com/pidsana42-lgtm/OMNI.git && cd OMNI
 pip install -r requirements.txt
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
-# 2. Login
-python scripts/login_hf.py --token "YOUR_HF_TOKEN"
-
-# 3. Setup tokens (once)
-python scripts/setup_tokens.py
-
-# 4. Phase 1 — Real Audio Alignment (google/fleurs th_th)
-python -m training.phase1_audio_alignment --config configs/phase1_alignment.yaml
+# 2. รันสคริปต์ดึง Phase 1 + ตรวจสอบ + เทรนต่อ
+python scripts/start_phase2.py --hf_token "YOUR_HF_TOKEN"
 ```
+
 
 **Expected Phase 1 behavior:**
 - Loss เริ่มต้นประมาณ ~5.5 (random), ลดลงต่อเนื่อง → ดีกว่า 3.0 คือ alignment เริ่มทำงาน

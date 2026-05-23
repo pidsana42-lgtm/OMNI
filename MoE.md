@@ -22,8 +22,8 @@ Token Embeddings (1024-dim)
 ### การแบ่งหน้าที่ของ Experts ทั้ง 4:
 | Expert | ฟังก์ชันการทำงาน | แหล่งข้อมูลการเทรน (Training Data) |
 |---|---|---|
-| **Audio** | ตีความสำเนียง คลื่นเสียง ไวยากรณ์คำพูด | `mozilla-foundation/common_voice_17_0` (th) |
-| **Vision/OCR** | สแกนตัวอักษรไทย Layout ตาราง และรูปภาพทั่วไป | `typhoon-ai/typhoon-ocr-7b` (Visual) + `BidirLM/colpali_train_retrieval` |
+| **Audio** | ตีความสำเนียง คลื่นเสียง ไวยากรณ์คำพูด | `google/fleurs` (th_th) หรือ `typhoon-ai/chatbot-arena-spoken-voices` |
+| **Vision/OCR** | สแกนตัวอักษรไทย Layout ตาราง และรูปภาพทั่วไป | `liuhaotian/LLaVA-Instruct-150K` / `BidirLM/colpali_train_retrieval` |
 | **Text/Lang** | ลื่นไหลด้านภาษาทั่วไป ตอบคำถามเชิงความรู้ | `mlabonne/FineTome-100k` / `pythainlp/thai-instruction-sft` |
 | **Agent** | การใช้เครื่องมือ (Tool Use), คิดวิเคราะห์แบบ ReAct, JSON Format | `xverse/agent-sft-data` (แปลไทย) / `tool-bench` |
 

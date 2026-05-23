@@ -104,10 +104,8 @@ python scripts/setup_tokens.py
 # Phase 1: จัดตำแหน่งเสียง
 python -m training.phase1_audio_alignment --config configs/phase1_alignment.yaml
 
-# Phase 2: เทรนสมองส่วนคิด (Full Fine-tuning)
-python -m training.phase2_omni_finetune \
-    --config configs/phase2_finetune.yaml \
-    --phase1_checkpoint outputs/phase1/best_phase1
+# Phase 2 (บน GPU/Session ใหม่): ดึงโมเดล Phase 1 อัตโนมัติและเทรน SFT ทันที
+python scripts/start_phase2.py --hf_token "YOUR_HF_TOKEN"
 
 # Phase 4: เทรนการออกเสียงพูดตอบกลับภาษาไทย (Speech Output)
 python -m training.phase4_audio_output \
@@ -135,14 +133,14 @@ python scripts/inference_stream.py --model_path outputs/phase4/phase4_final --au
 python scripts/inference_stream.py --model_path outputs/phase4/phase4_final --image_file chart.png --prompt "ภาพนี้แสดงอะไร" --stream
 ```
 
-### 6. อัปโหลดโมเดลขึ้น Hugging Face Hub (User: Phonsiri) [NEW]
+### 6. อัปโหลดโมเดลขึ้น Hugging Face Hub
 
 รันคำสั่งเพื่ออัปโหลดโมเดลตัวเต็มขึ้นไปที่บัญชี Hugging Face ของคุณได้โดยตรง:
 ```bash
 python scripts/push_to_hub.py \
-    --local_path outputs/phase4/phase4_final \
+    --local_path outputs/phase2/phase2_final \
     --repo_name thai-omni-modal-0.8b \
-    --username Phonsiri
+    --username your_username
 ```
 *(หากยังไม่ได้เข้าสู่ระบบของ HF สามารถล็อกอินด้วย Python Script: `python scripts/login_hf.py --token "your_hf_token"` หรือตั้งค่า `export HF_TOKEN="your_token"` ไว้ล่วงหน้าได้ครับ)*
 
