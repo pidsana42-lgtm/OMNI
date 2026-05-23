@@ -63,7 +63,7 @@ class AudioTextDataset(Dataset):
         manifest_file: Optional[str] = None,  # jsonl: {"audio": "path.wav", "text": "..."}
         max_audio_seconds: float = 30.0,
         max_text_length: int = 256,
-        system_prompt: str = "คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง",
+        system_prompt: str = "คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง /no_think",
     ):
         self.processor = processor
         self.max_audio_seconds = max_audio_seconds

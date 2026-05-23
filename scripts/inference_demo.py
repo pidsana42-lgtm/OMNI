@@ -95,7 +95,7 @@ def run_inference(args):
         # Build instruction prompt
         messages = processor.build_audio_instruction(
             transcript="",
-            system_prompt="คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง /no_think",
+            system_prompt="คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง",
         )
         messages = messages[:2]
         encoded = processor.apply_chat_template(
@@ -113,7 +113,7 @@ def run_inference(args):
 
         messages = processor.build_audio_instruction(
             transcript="",
-            system_prompt="คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง /no_think",
+            system_prompt="คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง",
         )
         messages = messages[:2]
         encoded = processor.apply_chat_template(
@@ -126,7 +126,7 @@ def run_inference(args):
         print(f"[Demo] Loading image: {args.image_file}")
         image = Image.open(args.image_file).convert("RGB")
         messages = [
-            {"role": "system", "content": "คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการวิเคราะห์ภาพ /no_think"},
+            {"role": "system", "content": "คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการวิเคราะห์ภาพ"},
             {
                 "role": "user",
                 "content": [
@@ -148,7 +148,7 @@ def run_inference(args):
     else:
         # Text only
         messages = [
-            {"role": "system", "content": "คุณเป็น AI ผู้ช่วยภาษาไทยที่เป็นประโยชน์ /no_think"},
+            {"role": "system", "content": "คุณเป็น AI ผู้ช่วยภาษาไทยที่เป็นประโยชน์"},
             {"role": "user", "content": args.prompt},
         ]
         encoded = processor.apply_chat_template(
@@ -171,11 +171,12 @@ def run_inference(args):
     think_end_tokens = [t for t in think_end_tokens if t is not None and t != tokenizer.unk_token_id]
     stop_ids = [processor.eos_token_id] + think_end_tokens
 
-    bad_words_ids = []
-    for w in ["<think>", "</think>"]:
-        w_ids = tokenizer(w, add_special_tokens=False).input_ids
-        if w_ids:
-            bad_words_ids.append(w_ids)
+    # Use suppress_tokens to strictly block <think> and related tokens
+    suppress_tokens = []
+    for w in ["<think>", "</think>", "<|think|>", "<|/think|>"]:
+        w_id = tokenizer.convert_tokens_to_ids(w)
+        if w_id is not None and w_id != tokenizer.unk_token_id:
+            suppress_tokens.append(w_id)
 
     # Use model.llm.generate for text generation
     with torch.autocast(args.device, dtype=torch.bfloat16):
@@ -198,7 +199,7 @@ def run_inference(args):
                 do_sample=False,
                 pad_token_id=processor.pad_token_id,
                 eos_token_id=stop_ids,
-                bad_words_ids=bad_words_ids if bad_words_ids else None,
+                suppress_tokens=suppress_tokens if suppress_tokens else None,
             )
             new_tokens = generated[0]
         else:
@@ -211,7 +212,7 @@ def run_inference(args):
                 do_sample=False,
                 pad_token_id=processor.pad_token_id,
                 eos_token_id=stop_ids,
-                bad_words_ids=bad_words_ids if bad_words_ids else None,
+                suppress_tokens=suppress_tokens if suppress_tokens else None,
             )
             new_tokens = generated[0][input_ids.shape[1]:]
 

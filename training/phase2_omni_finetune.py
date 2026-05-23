@@ -275,6 +275,16 @@ def main():
                 # Each model() call receives tensors with consistent batch dim.
                 # Losses are accumulated then averaged before backward.
                 loss_parts = []
+                
+                # ฟังก์ชันช่วยดึง aux loss จากทุกๆ MoE layer และรีเซ็ตค่า
+                def get_and_clear_aux_loss(model):
+                    from src.moe import SparseMoELayer
+                    aux = 0.0
+                    for m in model.modules():
+                        if isinstance(m, SparseMoELayer) and hasattr(m, "aux_loss"):
+                            aux = aux + m.aux_loss
+                            m.aux_loss = 0.0
+                    return aux
 
                 # ── Audio sub-batch ──────────────────────────────────────────
                 if has_audio_mask is not None and has_audio_mask.any():
@@ -284,8 +294,9 @@ def main():
                         audio_input_features=batch["audio_input_features"],  # [n_audio, 128, 3000]
                         labels=batch["labels"][has_audio_mask],
                     )
+                    aux_loss_audio = get_and_clear_aux_loss(model)
                     if audio_out.loss is not None:
-                        loss_parts.append(("audio", audio_out.loss, has_audio_mask.sum()))
+                        loss_parts.append(("audio", audio_out.loss + 0.01 * aux_loss_audio, has_audio_mask.sum()))
 
                 # ── Vision sub-batch ─────────────────────────────────────────
                 if has_vision_mask is not None and has_vision_mask.any():
@@ -296,8 +307,9 @@ def main():
                         image_grid_thw=batch.get("image_grid_thw"),
                         labels=batch["labels"][has_vision_mask],
                     )
+                    aux_loss_vision = get_and_clear_aux_loss(model)
                     if vision_out.loss is not None:
-                        loss_parts.append(("vision", vision_out.loss, has_vision_mask.sum()))
+                        loss_parts.append(("vision", vision_out.loss + 0.01 * aux_loss_vision, has_vision_mask.sum()))
 
                 # ── Text sub-batch ───────────────────────────────────────────
                 text_mask = ~has_audio_mask & ~has_vision_mask if (
@@ -309,8 +321,9 @@ def main():
                         attention_mask=batch["attention_mask"][text_mask],
                         labels=batch["labels"][text_mask],
                     )
+                    aux_loss_text = get_and_clear_aux_loss(model)
                     if text_out.loss is not None:
-                        loss_parts.append(("text", text_out.loss, text_mask.sum()))
+                        loss_parts.append(("text", text_out.loss + 0.01 * aux_loss_text, text_mask.sum()))
 
                 if not loss_parts:
                     continue

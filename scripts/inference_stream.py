@@ -177,6 +177,17 @@ def main():
     print(f"\n[Stream] 🧠 Generating text response...")
     t1 = time.perf_counter()
 
+    tokenizer = processor.tokenizer
+    think_end_tokens = tokenizer.convert_tokens_to_ids(["</think>", "<|/think|>"])
+    think_end_tokens = [t for t in think_end_tokens if t is not None and t != tokenizer.unk_token_id]
+    stop_ids = [processor.eos_token_id] + think_end_tokens
+
+    bad_words_ids = []
+    for w in ["<think>", "</think>", "<|think|>", "<|/think|>"]:
+        w_id = tokenizer.convert_tokens_to_ids(w)
+        if w_id is not None and w_id != tokenizer.unk_token_id:
+            bad_words_ids.append([w_id])
+
     with torch.no_grad():
         # Setup generation kwargs based on input modality
         gen_kwargs = {
@@ -187,7 +198,8 @@ def main():
             "temperature": 0.7,
             "top_p": 0.9,
             "pad_token_id": processor.pad_token_id,
-            "eos_token_id": processor.eos_token_id,
+            "eos_token_id": stop_ids,
+            "bad_words_ids": bad_words_ids if bad_words_ids else None,
             "return_dict_in_generate": True,
             "output_hidden_states": True,
         }

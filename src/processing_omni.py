@@ -24,6 +24,12 @@ AUDIO_SPECIAL_TOKENS = [
     "<|audio_pad|>",
 ]
 
+THINKING_SPECIAL_TOKENS = [
+    "<think>",
+    "</think>",
+]
+
+
 
 class OmniProcessor:
     """
@@ -60,7 +66,7 @@ class OmniProcessor:
     ):
         self.llm_processor = llm_processor
         self.audio_processor = audio_processor
-        self.tokenizer = llm_processor.tokenizer
+        self.tokenizer = getattr(llm_processor, "tokenizer", llm_processor)
         self.sample_rate = sample_rate
 
     @classmethod
@@ -88,20 +94,20 @@ class OmniProcessor:
 
     def _add_audio_tokens(self):
         """
-        Add special audio tokens to the tokenizer.
+        Add special audio and thinking tokens to the tokenizer.
         Must be called once before training — then save the tokenizer
         alongside the model so embeddings stay consistent.
         """
         existing = set(self.tokenizer.all_special_tokens)
-        new_tokens = [t for t in AUDIO_SPECIAL_TOKENS if t not in existing]
+        new_tokens = [t for t in AUDIO_SPECIAL_TOKENS + THINKING_SPECIAL_TOKENS if t not in existing]
 
         if new_tokens:
             self.tokenizer.add_special_tokens(
                 {"additional_special_tokens": new_tokens}
             )
-            print(f"[OmniProcessor] Added {len(new_tokens)} audio special tokens: {new_tokens}")
+            print(f"[OmniProcessor] Added {len(new_tokens)} special tokens: {new_tokens}")
         else:
-            print("[OmniProcessor] Audio special tokens already present.")
+            print("[OmniProcessor] Special tokens already present.")
 
         # Cache token ids for convenience
         self.audio_start_id = self.tokenizer.convert_tokens_to_ids("<|audio_start|>")
@@ -179,6 +185,20 @@ class OmniProcessor:
             )
             self.tokenizer.chat_template = _base_tok.chat_template
 
+        # ── Remove <think> blocks from text before tokenization ──────────
+        if not enable_thinking:
+            import copy
+            import re
+            cleaned_messages = []
+            for m in messages:
+                m_copy = copy.deepcopy(m)
+                if isinstance(m_copy.get("content"), str):
+                    m_copy["content"] = re.sub(r'<think>.*?</think>', '', m_copy["content"], flags=re.DOTALL).strip()
+                    # Also clean lingering tags just in case
+                    m_copy["content"] = m_copy["content"].replace("<think>", "").replace("</think>", "").strip()
+                cleaned_messages.append(m_copy)
+            messages = cleaned_messages
+
         # Call directly on the tokenizer so our patch is always used
         input_ids = self.tokenizer.apply_chat_template(
             messages,
@@ -189,7 +209,84 @@ class OmniProcessor:
             return_tensors=return_tensors,
             **kwargs,
         )
+        if not enable_thinking:
+            input_ids = self._strip_thinking_tokens(input_ids)
         return input_ids
+
+    def _strip_thinking_tokens(self, encoded: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove <think>...</think> block from tokenized output."""
+        think_start_id = self.tokenizer.convert_tokens_to_ids("<think>")
+        think_end_id = self.tokenizer.convert_tokens_to_ids("</think>")
+
+        think_starts = [think_start_id]
+        think_ends = [think_end_id]
+
+        alt_start = self.tokenizer.convert_tokens_to_ids("<|think|>")
+        if alt_start != self.tokenizer.unk_token_id and alt_start is not None:
+            think_starts.append(alt_start)
+        alt_end = self.tokenizer.convert_tokens_to_ids("<|/think|>")
+        if alt_end != self.tokenizer.unk_token_id and alt_end is not None:
+            think_ends.append(alt_end)
+
+        # Filter out invalid/unk ids
+        think_starts = [t for t in think_starts if t != self.tokenizer.unk_token_id and t is not None]
+        think_ends = [t for t in think_ends if t != self.tokenizer.unk_token_id and t is not None]
+
+        if not think_starts:
+            return encoded
+
+        input_ids = encoded.get("input_ids", None)
+        if input_ids is None:
+            return encoded
+
+        attention_mask = encoded.get("attention_mask", None)
+        is_pt = isinstance(input_ids, torch.Tensor)
+
+        # Convert to list for easier manipulation
+        if is_pt:
+            input_ids_list = input_ids.tolist()
+            attention_mask_list = attention_mask.tolist() if attention_mask is not None else None
+        else:
+            input_ids_list = input_ids
+            attention_mask_list = attention_mask
+
+        new_input_ids_list = []
+        new_attention_mask_list = [] if attention_mask_list is not None else None
+
+        for seq_idx, seq in enumerate(input_ids_list):
+            new_seq = []
+            new_mask = []
+            mask_seq = attention_mask_list[seq_idx] if attention_mask_list is not None else None
+
+            in_think = False
+            for i, token in enumerate(seq):
+                if token in think_starts:
+                    in_think = True
+                    continue
+                elif token in think_ends:
+                    in_think = False
+                    continue
+
+                if not in_think:
+                    new_seq.append(token)
+                    if mask_seq is not None:
+                        new_mask.append(mask_seq[i])
+
+            new_input_ids_list.append(new_seq)
+            if new_attention_mask_list is not None:
+                new_attention_mask_list.append(new_mask)
+
+        # Convert back to torch tensor if input was torch tensor
+        if is_pt:
+            encoded["input_ids"] = torch.tensor(new_input_ids_list, dtype=input_ids.dtype, device=input_ids.device)
+            if attention_mask is not None:
+                encoded["attention_mask"] = torch.tensor(new_attention_mask_list, dtype=attention_mask.dtype, device=attention_mask.device)
+        else:
+            encoded["input_ids"] = new_input_ids_list
+            if attention_mask is not None:
+                encoded["attention_mask"] = new_attention_mask_list
+
+        return encoded
 
     def build_audio_instruction(
         self,

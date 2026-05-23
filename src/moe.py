@@ -39,6 +39,14 @@ class SparseMoELayer(nn.Module):
         # Small weights init to keep routing balanced initially
         nn.init.normal_(self.gate.weight, std=0.01)
 
+    def _load_balance_loss(self, gate_logits: torch.Tensor) -> torch.Tensor:
+        # fraction of tokens ที่แต่ละ expert ได้รับ
+        probs = F.softmax(gate_logits, dim=-1)          # [Tokens, E]
+        density = probs.mean(dim=0)                      # [E]
+        # ถ้าสมดุล density ทุกตัว = 1/E → loss ต่ำ
+        aux = self.num_experts * (density * density).sum()
+        return aux
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """
         Args:
@@ -51,6 +59,9 @@ class SparseMoELayer(nn.Module):
 
         # 1. Compute gating logits
         gate_logits = self.gate(x)  # [Tokens, num_experts]
+        
+        # คำนวณ aux loss และเก็บไว้ในตัวแปรของ layer
+        self.aux_loss = self._load_balance_loss(gate_logits)
         
         # 2. Select Top-K experts
         weights = F.softmax(gate_logits, dim=-1)  # [Tokens, num_experts]
