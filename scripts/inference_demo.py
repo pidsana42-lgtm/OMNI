@@ -171,12 +171,11 @@ def run_inference(args):
     think_end_tokens = [t for t in think_end_tokens if t is not None and t != tokenizer.unk_token_id]
     stop_ids = [processor.eos_token_id] + think_end_tokens
 
-    # Use suppress_tokens to strictly block <think> and related tokens
-    suppress_tokens = []
-    for w in ["<think>", "</think>", "<|think|>", "<|/think|>"]:
-        w_id = tokenizer.convert_tokens_to_ids(w)
-        if w_id is not None and w_id != tokenizer.unk_token_id:
-            suppress_tokens.append(w_id)
+    # We DO NOT use suppress_tokens here.
+    # If we block the <think> token, reasoning models will try to spell it out using raw text tokens
+    # (e.g. " here" + "think" + ">") which causes infinite loops.
+    # Instead, we let it output the <think> block naturally, and then strip it using regex later.
+    suppress_tokens = None
 
     # Use model.llm.generate for text generation
     with torch.autocast(args.device, dtype=torch.bfloat16):
