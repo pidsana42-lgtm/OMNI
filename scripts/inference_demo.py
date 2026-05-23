@@ -69,40 +69,27 @@ def run_inference(args):
     use_dataset = args.test_dataset or (not args.audio_file and not args.image_file and args.prompt == "ถอดเสียงต่อไปนี้:")
 
     if use_dataset:
-        print("[Demo] Loading 1 sample from 'typhoon-ai/typhoon-audio-preview-data' [split: pretrained]...")
-        from datasets import load_dataset
-        ds = load_dataset("typhoon-ai/typhoon-audio-preview-data", split="pretrained", streaming=True, trust_remote_code=True)
+        print("[Demo] Loading 1 sample from 'google/fleurs' (th_th) [split: validation]...")
+        from datasets import load_dataset, Audio as HFAudio
+        import io
+        import soundfile as sf
+        
+        ds = load_dataset("google/fleurs", "th_th", split="validation", streaming=True)
+        ds = ds.cast_column("audio", HFAudio(decode=False))
         sample = next(iter(ds))
 
-        waveform = None
-        sr = 16000
-
-        # Try to load audio from 'audio' dict first, otherwise fall back to 'path'
-        if "audio" in sample and sample["audio"] is not None:
-            audio_data = sample["audio"]
-            waveform = audio_data["array"].astype(np.float32)
-            sr = audio_data["sampling_rate"]
-        elif "path" in sample and sample["path"] is not None:
-            path_val = sample["path"]
-            print(f"[Demo] Loading audio from path: {path_val}")
-            import soundfile as sf
-            try:
-                waveform, sr = sf.read(path_val)
-                waveform = waveform.astype(np.float32)
-            except Exception as e:
-                print(f"[Warning] Failed to load local path {path_val}: {e}")
-                raise RuntimeError(
-                    f"Could not load audio from {path_val}. If you are running this locally and the cloud dataset is not mounted, "
-                    f"please specify a local file using --audio_file instead."
-                )
-
-        if waveform is None:
-            raise ValueError("Could not find or load audio from the dataset sample.")
+        audio_dict = sample.get("audio", {})
+        audio_bytes = audio_dict.get("bytes")
+        if audio_bytes is not None:
+            waveform, sr = sf.read(io.BytesIO(audio_bytes))
+            waveform = waveform.astype(np.float32)
+        else:
+            raise ValueError("Audio bytes not found in dataset sample.")
 
         audio_batch = processor.process_audio(waveform, sr)
         audio_features = audio_batch["input_features"].to(args.device, dtype=torch.bfloat16)
 
-        ground_truth = sample.get("response", "")
+        ground_truth = sample.get("transcription", "")
         print(f"[Demo] Ground Truth Transcription: {ground_truth}")
 
         # Build instruction prompt
