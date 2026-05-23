@@ -7,11 +7,12 @@ model:
   projector_layers: 2
 
 data:
-  # Primary: Typhoon Audio Preview Data (ASR & Multimodal Thai)
-  hf_dataset_name: "typhoon-ai/typhoon-audio-preview-data"
-  hf_dataset_config: null
-  hf_split: "pretrained"
-  eval_split: "sft"
+  # Mozilla Common Voice TH — มีไฟล์เสียงจริงอยู่ใน HF โดยตรง (ไม่ต้องโหลดจากดิสก์)
+  hf_dataset_name: "mozilla-foundation/common_voice_17_0"
+  hf_dataset_config: "th"
+  hf_split: "train"
+  eval_split: "validation"
+  text_column: "sentence"   # คอลัมน์คำถอดเสียงของ Common Voice
   max_audio_seconds: 30.0
   max_text_length: 256
 
@@ -28,9 +29,9 @@ training:
   save_steps: 500
   output_dir: "outputs/phase1"
   
-  # Dataset size limits to speed up Phase 1 and prevent cloud time exhaustion
-  max_train_samples: 30000
-  max_eval_samples: 500
+  # Dataset size limits — Common Voice TH มีประมาณ 2,000 train samples
+  max_train_samples: 2000
+  max_eval_samples: 200
 
   # Automatic Hugging Face Hub synchronization
   push_to_hub: true
@@ -40,5 +41,5 @@ training:
 logging:
   use_wandb: true
   wandb_project: "thai-omni-modal"
-  run_name: "phase1-audio-alignment"
+  run_name: "phase1-audio-alignment-real"  # real audio run
   log_every: 50
