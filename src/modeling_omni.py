@@ -192,8 +192,8 @@ class OmniModalModel(nn.Module):
     def setup_phase2(self):
         """
         Phase 2: Omni-Modal Full Fine-Tuning
-        Freeze: Whisper + Qwen Vision Encoder
-        Unfreeze: Qwen LLM backbone + AudioProjector
+        Freeze: Whisper + Qwen Vision Encoder + Text/Lang Expert (Expert 2)
+        Unfreeze: Qwen LLM backbone (except Expert 2) + AudioProjector + Router Gates
         """
         print("\n[OmniModal] 📌 Setting up Phase 2: Omni Fine-Tuning")
         self.freeze_audio_encoder()
@@ -204,6 +204,18 @@ class OmniModalModel(nn.Module):
             for p in self.llm.visual.parameters():
                 p.requires_grad = False
             print("[OmniModal] ❄️  Qwen vision encoder frozen (within LLM).")
+            
+        # ── Apply MoE Expert Freezing Strategy ───────────────────────
+        moe_layers_found = 0
+        for name, module in self.named_modules():
+            if module.__class__.__name__ == "SparseMoELayer":
+                moe_layers_found += 1
+                if len(module.experts) >= 3:
+                    for p in module.experts[2].parameters():
+                        p.requires_grad = False
+        if moe_layers_found > 0:
+            print(f"[OmniModal] ❄️  Froze Expert 2 (Text/Lang) across {moe_layers_found} MoE layers.")
+
         trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
         total = sum(p.numel() for p in self.parameters())
         print(f"[OmniModal] Trainable: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
