@@ -20,7 +20,7 @@ import numpy as np
 
 from datasets import load_dataset
 
-from ..src.processing_omni import OmniProcessor
+from src.processing_omni import OmniProcessor
 
 
 class VisionTextDataset(Dataset):

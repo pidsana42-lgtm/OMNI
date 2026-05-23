@@ -19,8 +19,8 @@ import soundfile as sf
 import numpy as np
 import librosa
 
-from ..src.processing_omni import OmniProcessor
-from ..src.audio_decoder import AudioCodec
+from src.processing_omni import OmniProcessor
+from src.audio_decoder import AudioCodec
 
 
 class AudioOutputDataset(Dataset):

@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 from typing import Dict, Any, List, Optional
 from datasets import load_dataset
 
-from ..src.processing_omni import OmniProcessor
+from src.processing_omni import OmniProcessor
 
 
 class AgentSFTDataset(Dataset):

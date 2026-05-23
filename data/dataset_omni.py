@@ -17,7 +17,7 @@ import torch
 from torch.utils.data import Dataset, ConcatDataset
 from typing import Dict, Any, List, Optional
 
-from ..src.processing_omni import OmniProcessor
+from src.processing_omni import OmniProcessor
 from .dataset_audio import AudioTextDataset
 from .dataset_vision import VisionTextDataset
 
