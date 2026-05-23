@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument("--audio_file", default=None, help="Path to .wav audio file")
     parser.add_argument("--image_file", default=None, help="Path to image file")
     parser.add_argument("--prompt", default="ถอดเสียงต่อไปนี้:", help="Text prompt")
+    parser.add_argument("--test_dataset", action="store_true", help="Pull a sample from the dataset to test")
     parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
@@ -62,26 +63,55 @@ def run_inference(args):
     audio_features = None
     pixel_values = None
     image_grid_thw = None
+    ground_truth = None
 
-    if args.audio_file:
+    # Auto-trigger test_dataset if no inputs are provided
+    use_dataset = args.test_dataset or (not args.audio_file and not args.image_file and args.prompt == "ถอดเสียงต่อไปนี้:")
+
+    if use_dataset:
+        print("[Demo] Loading 1 sample from 'typhoon-ai/typhoon-audio-preview-data' [split: pretrained]...")
+        from datasets import load_dataset
+        ds = load_dataset("typhoon-ai/typhoon-audio-preview-data", split="pretrained", streaming=True, trust_remote_code=True)
+        sample = next(iter(ds))
+
+        audio_data = sample["audio"]
+        waveform = audio_data["array"].astype(np.float32)
+        sr = audio_data["sampling_rate"]
+
+        audio_batch = processor.process_audio(waveform, sr)
+        audio_features = audio_batch["input_features"].to(args.device, dtype=torch.bfloat16)
+
+        ground_truth = sample.get("response", "")
+        print(f"[Demo] Ground Truth Transcription: {ground_truth}")
+
+        # Build instruction prompt
+        messages = processor.build_audio_instruction(
+            transcript="",
+            system_prompt="คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง",
+        )
+        messages = messages[:2]
+        encoded = processor.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+
+    elif args.audio_file:
         print(f"[Demo] Loading audio: {args.audio_file}")
         waveform, sr = sf.read(args.audio_file)
         waveform = waveform.astype(np.float32)
         audio_batch = processor.process_audio(waveform, sr)
         audio_features = audio_batch["input_features"].to(args.device, dtype=torch.bfloat16)
 
-        # Build instruction prompt
         messages = processor.build_audio_instruction(
-            transcript="",    # Empty — model will generate
+            transcript="",
             system_prompt="คุณเป็น AI ผู้ช่วยภาษาไทยที่เชี่ยวชาญด้านการถอดเสียง",
         )
-        # Remove the empty assistant turn so model generates freely
         messages = messages[:2]
-
         encoded = processor.apply_chat_template(
             messages,
             add_generation_prompt=True,
-            enable_thinking=False,   # ← Critical
+            enable_thinking=False,
         )
 
     elif args.image_file:
@@ -127,39 +157,50 @@ def run_inference(args):
     print("[Demo] Generating response...")
     print("=" * 60)
 
+    # Use model.llm.generate for text generation
     with torch.autocast(args.device, dtype=torch.bfloat16):
-        output = model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            audio_input_features=audio_features,
-            pixel_values=pixel_values,
-            image_grid_thw=image_grid_thw,
-            use_cache=True,
-        )
+        if audio_features is not None:
+            # For audio, we MUST construct inputs_embeds because Qwen's native generate doesn't know about audio
+            audio_embeds = model._encode_audio(audio_features)
+            embed_fn = model._get_embed_tokens()
+            text_embeds = embed_fn(input_ids)
+            inputs_embeds = torch.cat([audio_embeds, text_embeds], dim=1)
 
-    # For demonstration: use model.llm.generate for actual text generation
-    # (OmniModal forward gives loss; use .generate for inference)
-    with torch.autocast(args.device, dtype=torch.bfloat16):
-        generated = model.llm.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            pixel_values=pixel_values,
-            image_grid_thw=image_grid_thw,
-            max_new_tokens=args.max_new_tokens,
-            do_sample=False,
-            temperature=0.7,
-            top_p=0.8,
-            top_k=20,
-            repetition_penalty=1.5,
-            pad_token_id=processor.pad_token_id,
-            eos_token_id=processor.eos_token_id,
-        )
+            # Extend attention mask
+            B, T_audio, _ = audio_embeds.shape
+            audio_mask = torch.ones(B, T_audio, dtype=attention_mask.dtype, device=attention_mask.device)
+            extended_attention_mask = torch.cat([audio_mask, attention_mask], dim=1)
 
-    # Decode only the newly generated tokens
-    new_tokens = generated[0][input_ids.shape[1]:]
+            generated = model.llm.generate(
+                inputs_embeds=inputs_embeds,
+                attention_mask=extended_attention_mask,
+                max_new_tokens=args.max_new_tokens,
+                do_sample=False,
+                pad_token_id=processor.pad_token_id,
+                eos_token_id=processor.eos_token_id,
+            )
+            new_tokens = generated[0]
+        else:
+            generated = model.llm.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                pixel_values=pixel_values,
+                image_grid_thw=image_grid_thw,
+                max_new_tokens=args.max_new_tokens,
+                do_sample=False,
+                pad_token_id=processor.pad_token_id,
+                eos_token_id=processor.eos_token_id,
+            )
+            new_tokens = generated[0][input_ids.shape[1]:]
+
     response = processor.decode(new_tokens)
-    print(response)
+    print(f"Prediction: {response}")
     print("=" * 60)
+
+    if ground_truth:
+        print(f"Ground Truth: {ground_truth}")
+        print("=" * 60)
+
     return response
 
 
