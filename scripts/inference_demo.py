@@ -42,6 +42,7 @@ def parse_args():
     parser.add_argument("--image_file", default=None, help="Path to image file")
     parser.add_argument("--prompt", default="ถอดเสียงต่อไปนี้:", help="Text prompt")
     parser.add_argument("--test_dataset", action="store_true", help="Pull a sample from the dataset to test")
+    parser.add_argument("--sample_idx", type=int, default=0, help="Index of the sample to pull from the dataset (when using --test_dataset)")
     parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
@@ -70,14 +71,22 @@ def run_inference(args):
     use_dataset = args.test_dataset or (not args.audio_file and not args.image_file and args.prompt == "ถอดเสียงต่อไปนี้:")
 
     if use_dataset:
-        print("[Demo] Loading 1 sample from 'google/fleurs' (th_th) [split: validation]...")
+        print(f"[Demo] Loading sample at index {args.sample_idx} from 'google/fleurs' (th_th) [split: validation]...")
         from datasets import load_dataset, Audio as HFAudio
         import io
         import soundfile as sf
+        from itertools import islice
         
         ds = load_dataset("google/fleurs", "th_th", split="validation", streaming=True)
         ds = ds.cast_column("audio", HFAudio(decode=False))
-        sample = next(iter(ds))
+        
+        try:
+            sample = next(islice(iter(ds), args.sample_idx, None))
+        except StopIteration:
+            print(f"[Warning] Index {args.sample_idx} out of range, falling back to index 0.")
+            ds = load_dataset("google/fleurs", "th_th", split="validation", streaming=True)
+            ds = ds.cast_column("audio", HFAudio(decode=False))
+            sample = next(iter(ds))
 
         audio_dict = sample.get("audio", {})
         audio_bytes = audio_dict.get("bytes")
