@@ -50,38 +50,46 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SparseMoELayer(nn.Module):
-    def __init__(self, config, num_experts=4, top_k=2):
+    def __init__(self, experts, hidden_dim, num_experts=4, top_k=2):
         super().__init__()
+        self.experts = nn.ModuleList(experts)
         self.num_experts = num_experts
         self.top_k = top_k
-        
-        # คัดลอกและสร้าง MLP แยกกัน 4 ตัว
-        self.experts = nn.ModuleList([
-            # Qwen3.5 MLP structure (GateUpProj + DownProj)
-            # ดึงโครงสร้างเดิมมาใช้
-        ])
-        
-        # Router เพื่อเลือกผู้เชี่ยวชาญ
-        self.gate = nn.Linear(config.hidden_size, num_experts, bias=False)
+        self.gate = nn.Linear(hidden_dim, num_experts, bias=False)
 
     def forward(self, hidden_states):
-        # hidden_states: [B * T, hidden_size]
         orig_shape = hidden_states.shape
         x = hidden_states.view(-1, orig_shape[-1])
+        num_tokens = x.shape[0]
+
+        # 1. Compute gating logits
+        gate_logits = self.gate(x)
         
-        # 1. คำนวณน้ำหนักการ Routing
-        router_logits = self.gate(x)
-        routing_weights = F.softmax(router_logits, dim=-1)
-        
-        # 2. เลือก Top-K
-        top_weights, top_indices = torch.topk(routing_weights, self.top_k, dim=-1)
-        top_weights = top_weights / top_weights.sum(dim=-1, keepdim=True) # Normalize
-        
-        # 3. ส่งข้อมูลไปคำนวณใน Expert ที่เลือกและผสมผลลัพธ์กลับมา
-        # (ใช้ Dynamic Masking เพื่อความเร็ว)
-        out = torch.zeros_like(x)
-        ...
-        return out.view(orig_shape)
+        # 2. Select Top-K experts
+        weights = F.softmax(gate_logits, dim=-1)
+        top_weights, top_indices = torch.topk(weights, self.top_k, dim=-1)
+        top_weights = top_weights / (top_weights.sum(dim=-1, keepdim=True) + 1e-6)
+
+        # 3. Route tokens to respective experts
+        final_output = torch.zeros_like(x)
+
+        for expert_idx in range(self.num_experts):
+            mask = (top_indices == expert_idx)
+            if not mask.any():
+                continue
+
+            token_indices, k_positions = torch.where(mask)
+            expert_inputs = x[token_indices]
+            expert_outputs = self.experts[expert_idx](expert_inputs)
+            expert_weights = top_weights[token_indices, k_positions].unsqueeze(-1)
+
+            # [Dtype Fix]: Softmax upcasts routing weights to float32. 
+            # We explicitly cast scaled outputs to match final_output dtype (e.g. BFloat16)
+            # to avoid runtime index_add_ errors.
+            scaled_outputs = (expert_outputs * expert_weights).to(final_output.dtype)
+            final_output.index_add_(0, token_indices, scaled_outputs)
+
+        return final_output.view(orig_shape)
 ```
 
 ---

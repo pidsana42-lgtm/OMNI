@@ -287,16 +287,30 @@ def make_report(output_filename="outputs/OMNI_Project_Report.pdf"):
         bullet_style
     ))
     
-    story.append(Paragraph("4.2 ปัญหา Dependency ใหม่ของระบบเสียง (The torchcodec Issue)", body_style))
+    story.append(Paragraph("4.2 ปัญหา Dependency ของระบบเสียงและการหลีกเลี่ยง torchcodec", body_style))
     story.append(Paragraph(
-        "<b>ปัญหา:</b> ตัวจัดการไฟล์เสียงของ Hugging Face Datasets เวอร์ชันล่าสุด บังคับใช้ไลบรารี <code>torchcodec</code> ในการถอดรหัสเสียง ซึ่งไม่เสถียรและทำงานผิดพลาดบนการประมวลผลบางรูปแบบ<br/>"
-        "<b>แนวทางแก้ไข:</b> ปิดระบบถอดรหัสอัตโนมัติด้วยคำสั่ง <code>Audio(decode=False)</code> และเขียนระบบถอดรหัสด้วยตนเอง (Manual Decode) ผ่านไลบรารี <code>soundfile</code> และ <code>io.BytesIO</code> ช่วยให้สามารถรองรับไบต์ดิบได้อย่างสมบูรณ์",
+        "<b>ปัญหา:</b> ไลบรารี <code>datasets</code> ของ Hugging Face มีการนำเข้า <code>torchcodec</code> แบบ Lazy ซึ่งจะกระตุ้นข้อผิดพลาด ImportError ใน DataLoader workers เครื่อง Cloud ที่ขาดไลบรารีระบบ FFmpeg<br/>"
+        "<b>แนวทางแก้ไข:</b> สแกนคอลัมน์และแคสต์ประเภทคอลัมน์ที่เป็น Audio ทั้งหมดในขั้นตอนโหลดข้อมูลให้เป็น Plain Python Dictionary (มีโครงสร้าง <code>bytes</code> และ <code>path</code>) ถาวร จากนั้นทำการถอดรหัสเสียงดิบด้วยตนเองโดยใช้ไลบรารี <code>soundfile</code> และ <code>io.BytesIO</code> รวมถึงทำการจำลอง Downmix สเตอริโอเป็นโมโนเพื่อลดความคลาดเคลื่อนของขนาด",
         bullet_style
     ))
 
-    story.append(Paragraph("4.3 การเพิ่มประสิทธิภาพสำหรับเซสชันถัดไป (Session Switching Ready)", body_style))
+    story.append(Paragraph("4.3 ปัญหาโครงสร้างคอลัมน์ของชุดข้อมูลเสียงสนทนา (KeyError: 'response')", body_style))
     story.append(Paragraph(
-        "เขียนสคริปต์ <code>scripts/start_phase2.py</code> เพื่อใช้เชื่อมต่อข้าม GPU/Session เครื่องใหม่ โดยจะทำงาน 5 ขั้นตอนอัตโนมัติ: ล็อกอิน HF, ดาวน์โหลดน้ำหนัก Phase 1, ตรวจสอบผ่านการทดสอบด่วน (Inference Check), แคชข้อมูลล่วงหน้า และเปิดทำงาน Phase 2 ทันที",
+        "<b>ปัญหา:</b> ชุดข้อมูล <code>typhoon-ai/chatbot-arena-spoken-voices</code> มีโครงสร้างคอลัมน์เสียงแตกต่างจากปกติ (เช่น <code>voice_a</code>, <code>voice_user</code>) และไม่มีคอลัมน์ <code>response</code> ส่งผลให้เกิด KeyError ในขั้นตอน SFT<br/>"
+        "<b>แนวทางแก้ไข:</b> เพิ่มระบบตรวจสอบประเภทข้อมูลใน <code>__getitem__</code> ของ DataLoader เมื่อพบรูปแบบข้อมูลบทสนทนา จะสกัดเสียงพูดและทรานสคริปต์ของคำตอบผู้ช่วย (Assistant Response) จาก <code>conversation_a/voice_a</code> ออกมาใช้งานแบบพลวัตโดยอัตโนมัติ",
+        bullet_style
+    ))
+
+    story.append(Paragraph("4.4 ข้อผิดพลาดชนิดข้อมูลของเลเยอร์ MoE (BFloat16 vs Float32)", body_style))
+    story.append(Paragraph(
+        "<b>ปัญหา:</b> เกิดข้อผิดพลาด <code>RuntimeError: index_add_(): self (BFloat16) and source (Float) must have the same scalar type</code> ในโมดูล <code>moe.py</code> เนื่องจากผลลัพธ์ของฟังก์ชัน Softmax จากเกตถูกแปลงเป็น Float32 เพื่อเสถียรภาพตัวเลข ในขณะที่ค่า Hidden States ของแบบจำลองอยู่ในโหมด BFloat16<br/>"
+        "<b>แนวทางแก้ไข:</b> เพิ่มโค้ดแคสต์ชนิดข้อมูล <code>(expert_outputs * expert_weights).to(final_output.dtype)</code> ก่อนนำเข้าการประมวลผลคำสั่ง <code>index_add_</code> เพื่อรองรับความเข้ากันได้แบบ 100%",
+        bullet_style
+    ))
+
+    story.append(Paragraph("4.5 การเตรียมความพร้อมการย้ายระบบประมวลผล (Session Switching Ready)", body_style))
+    story.append(Paragraph(
+        "พัฒนาและเขียนสคริปต์แบบรวมศูนย์ <code>scripts/start_phase2.py</code> เพื่อรองรับการทำงานย้ายข้ามเซสชัน GPU โดยอัตโนมัติ ซึ่งจะครอบคลุมขั้นตอนล็อกอิน ดาวน์โหลดน้ำหนัก ทดสอบคุณภาพเสียง (Inference Check) และสตาร์ท SFT ทันที",
         bullet_style
     ))
 

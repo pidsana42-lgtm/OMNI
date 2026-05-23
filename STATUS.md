@@ -6,13 +6,14 @@
 - **MoE Architecture & Adapter**: Verified. (`python dry_run_moe.py` → 3/3 Passed)
 - **Token Setup**: Special audio tokens added to tokenizer (`outputs/tokenizer_setup/`)
 - **HF Hub Sync**: Model auto-syncs every `save_steps` during training runs.
-- **Multi-modality Fixes**: Avoided `torchcodec` dependency issues by implementing manual audio bytes decoding via `soundfile/io.BytesIO` and setting `Audio(decode=False)` in dataset mapping.
+- **Multi-modality Fixes**: Avoided `torchcodec` dependency issues by implementing automatic detection of all `Audio` columns and casting them to plain Python dictionaries at dataset load time. Implemented manual audio decoding using `soundfile/io.BytesIO` in `__getitem__` loop with stereo-to-mono downmixing.
+- **MoE Type Stability**: Resolved a critical type mismatch in the Sparse MoE routing layer (`index_add_` dtype collision between BF16 outputs and FP32 gating softmax weights) by casting scaled expert outputs to the final target dtype.
 
 ### 🔄 In Progress / Starting Next
 - **Phase 2 SFT (Interleaved Audio + Vision + Text)**: Ready to run on a new GPU/session.
   - Setup script `scripts/start_phase2.py` fully configured.
   - Datasets updated to stable public endpoints:
-    - **Audio**: `google/fleurs` th_th (voice data cached with manual decoding) or candidate `typhoon-ai/chatbot-arena-spoken-voices` (real spoken arena dataset).
+    - **Audio**: `google/fleurs` th_th (voice data cached with manual decoding) or `typhoon-ai/chatbot-arena-spoken-voices` (fully supported with custom audio columns `voice_a`/`voice_user` and conversational text mapping).
     - **Text**: `mlabonne/FineTome-100k` (high quality conversations, bypasses permission locks).
     - **Vision**: `liuhaotian/LLaVA-Instruct-150K` (public multi-modal instructions).
 
@@ -27,7 +28,9 @@
 
 | Bug | ไฟล์ | สถานะ |
 |-----|------|--------|
-| `ImportError: To support decoding audio data, please install 'torchcodec'` | `data/dataset_audio.py` | ✅ Fixed (Use `HFAudio(decode=False)` and decode using `soundfile/BytesIO`) |
+| `ImportError: To support decoding audio data, please install 'torchcodec'` | `data/dataset_audio.py` | ✅ Fixed (Automatic casting of all `Audio` columns to plain dict features and manual decoding using `soundfile/BytesIO`) |
+| `KeyError: 'response'` on `chatbot-arena-spoken-voices` | `data/dataset_audio.py` | ✅ Fixed (Added custom columns mapping for spoken arena dataset in `__getitem__` and `start_phase2.py`) |
+| `RuntimeError: index_add_(): self (BFloat16) and source (Float) must have the same scalar type` | `src/moe.py` | ✅ Fixed (Cast expert outputs to target dtype before index_add_) |
 | `local_audio_dir` ไม่ถูก save เป็น `self.local_audio_dir` → NameError | `data/dataset_audio.py` | ✅ Fixed |
 | `_get_embed_tokens()` หา embed_tokens ใน LLM ไม่เจอ | `src/modeling_omni.py` | ✅ Fixed |
 | `OmniConfig` ไม่มี `enable_audio_output` attribute | `src/configuration_omni.py` | ✅ Fixed |
