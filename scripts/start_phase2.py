@@ -19,7 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hf_token", default=None,
                         help="HuggingFace token (or set HF_TOKEN env var)")
-    parser.add_argument("--hub_model_id", default="thai-omni-modal-0.8b-phase1",
+    parser.add_argument("--hub_model_id", default="Phonsiri/thai-omni-modal-0.8b-phase1",
                         help="HF Hub repo ID for Phase 1 checkpoint")
     parser.add_argument("--local_dir", default="outputs/phase1/hf_checkpoint",
                         help="Local directory to save the pulled checkpoint")
@@ -81,14 +81,17 @@ def main():
     # ── Step 2: Pull Phase 1 checkpoint from HF Hub ───────────────────────
     local_dir = Path(args.local_dir)
     print("=" * 60)
-    print(f"[Step 2] Downloading Phase 1 checkpoint: {args.hub_model_id}")
+    repo_id = args.hub_model_id
+    if "/" not in repo_id:
+        repo_id = f"Phonsiri/{repo_id}"
+    print(f"[Step 2] Downloading Phase 1 checkpoint: {repo_id}")
 
     if args.skip_download and local_dir.exists() and any(local_dir.iterdir()):
         print(f"✅ Skipping download — checkpoint already at {local_dir}")
     else:
         local_dir.mkdir(parents=True, exist_ok=True)
         snapshot_download(
-            repo_id=args.hub_model_id,
+            repo_id=repo_id,
             repo_type="model",
             local_dir=str(local_dir),
             token=token,
