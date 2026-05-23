@@ -12,7 +12,13 @@ def main():
     output_wav = "sample_thai.wav"
     
     try:
-        urllib.request.urlretrieve(url, output_ogg)
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        )
+        with urllib.request.urlopen(req) as response:
+            with open(output_ogg, 'wb') as f:
+                f.write(response.read())
         print(f"Downloaded to {output_ogg}")
         y, sr = librosa.load(output_ogg, sr=16000)
         print(f"Loaded audio: shape {y.shape}, sr {sr}")

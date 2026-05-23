@@ -62,6 +62,7 @@ class AudioTextDataset(Dataset):
         self.processor = processor
         self.max_audio_seconds = max_audio_seconds
         self.max_text_length = max_text_length
+        self.local_audio_dir = local_audio_dir
         self.sample_rate = processor.sample_rate
         self.system_prompt = system_prompt
 
@@ -139,11 +140,11 @@ class AudioTextDataset(Dataset):
                 p = Path(path_val)
                 # If local_audio_dir is specified and path is relative, prefix it
                 # We can also search in local_audio_dir if path is absolute but missing
-                if local_audio_dir:
+                if self.local_audio_dir:
                     if not p.is_absolute():
-                        p = Path(local_audio_dir) / p
+                        p = Path(self.local_audio_dir) / p
                     elif not p.exists():
-                        p = Path(local_audio_dir) / p.name
+                        p = Path(self.local_audio_dir) / p.name
 
                 if p.exists():
                     waveform, sr = sf.read(str(p))
