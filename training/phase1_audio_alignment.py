@@ -219,7 +219,25 @@ def main():
             if global_step % cfg.training.save_steps == 0 and accelerator.is_main_process:
                 ckpt_path = output_dir / f"checkpoint-{global_step}"
                 accelerator.save_state(str(ckpt_path))
-                print(f"\n[Phase1] ✅ Saved checkpoint at step {global_step}")
+                print(f"\n[Phase1] ✅ Saved accelerator state at step {global_step}")
+
+                # Save standard HF model weights and processor inside the checkpoint directory
+                hf_ckpt_path = output_dir / f"checkpoint-{global_step}-hf"
+                accelerator.unwrap_model(model).save_pretrained(str(hf_ckpt_path))
+                processor.save_pretrained(str(hf_ckpt_path))
+                print(f"[Phase1] ✅ Saved HF model weights at step {global_step} to {hf_ckpt_path}")
+
+                # Push this step checkpoint to Hugging Face Hub
+                if cfg.training.get("push_to_hub", False):
+                    try:
+                        from scripts.push_to_hub import push_to_hub_direct
+                        push_to_hub_direct(
+                            local_path=str(hf_ckpt_path),
+                            repo_name=cfg.training.get("hub_model_id", "thai-omni-modal-0.8b-phase1"),
+                            private=cfg.training.get("hub_private", True),
+                        )
+                    except Exception as e:
+                        print(f"[Phase1] HF push failed at step {global_step}: {e}")
 
         # ── Eval per epoch ────────────────────────────────────────────────
         model.eval()
