@@ -81,23 +81,38 @@ class AudioTextDataset(Dataset):
                 split=hf_split,
                 trust_remote_code=True,
             )
-            # Cast audio column to a plain struct features dictionary to completely bypass Hugging Face
+            # Cast all Audio columns to plain dicts to completely bypass Hugging Face
             # audio decoding logic (which triggers torchcodec import and requirement).
             import datasets
             try:
                 new_features = raw.features.copy()
-                new_features[audio_column] = {"bytes": datasets.Value("binary"), "path": datasets.Value("string")}
-                raw = raw.cast(new_features)
-                print(f"[AudioDataset] Successfully cast {audio_column} to struct format to bypass torchcodec requirement.")
+                cast_cols = []
+                for col_name, feat in raw.features.items():
+                    if isinstance(feat, datasets.Audio) or (hasattr(feat, "__class__") and feat.__class__.__name__ == "Audio"):
+                        new_features[col_name] = {"bytes": datasets.Value("binary"), "path": datasets.Value("string")}
+                        cast_cols.append(col_name)
+                
+                if cast_cols:
+                    raw = raw.cast(new_features)
+                    print(f"[AudioDataset] Successfully cast audio columns {cast_cols} to struct format to bypass torchcodec requirement.")
             except Exception as e:
-                print(f"[AudioDataset] Warning: failed to cast {audio_column} to struct. Falling back to HFAudio(decode=False). Error: {e}")
+                print(f"[AudioDataset] Warning: failed to cast audio columns to struct. Error: {e}")
+                # Fallback to decode=False on target column if cast fails
                 try:
                     raw = raw.cast_column(audio_column, HFAudio(decode=False))
                 except Exception:
                     pass
             self.data = raw
             self.audio_col = audio_column
-            self.text_col = text_column or self._detect_text_column(raw.column_names)
+            # Check if text_column is in the dataset columns. If not, we will detect or handle it dynamically in __getitem__
+            if text_column and text_column in raw.column_names:
+                self.text_col = text_column
+            else:
+                try:
+                    self.text_col = text_column or self._detect_text_column(raw.column_names)
+                except ValueError:
+                    # Fallback placeholder, we will extract it dynamically in __getitem__
+                    self.text_col = text_column or "transcription"
 
         elif manifest_file:
             self.data = self._load_manifest(manifest_file)
@@ -134,11 +149,38 @@ class AudioTextDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         item = self.data[idx]
 
+        # ── Determine audio and text columns dynamically ──────────────────
+        is_spoken_arena = "conversation_a" in item and ("voice_a" in item or "voice_user" in item)
+        
+        audio_val = None
+        transcript = ""
+
+        if is_spoken_arena:
+            # Use voice_a (model response) and match with conversation_a's assistant response
+            audio_val = item.get("voice_a")
+            conv = item.get("conversation_a", [])
+            assistant_msgs = [m["content"] for m in conv if m.get("role") == "assistant"]
+            transcript = assistant_msgs[-1] if assistant_msgs else ""
+            
+            # Fallback if voice_a is missing/empty
+            if audio_val is None or (isinstance(audio_val, dict) and not audio_val.get("bytes") and not audio_val.get("path")):
+                audio_val = item.get("voice_user")
+                user_msgs = [m["content"] for m in conv if m.get("role") == "user"]
+                transcript = user_msgs[0] if user_msgs else ""
+        else:
+            audio_val = item.get(self.audio_col)
+            if self.text_col in item:
+                transcript = str(item[self.text_col]).strip()
+            else:
+                # Dynamic fallback for text if self.text_col is not found
+                for col in TRANSCRIPT_COLUMNS:
+                    if col in item:
+                        transcript = str(item[col]).strip()
+                        break
+
         # ── Load audio ────────────────────────────────────────────────────
         waveform = None
         sr = self.sample_rate
-
-        audio_val = item.get(self.audio_col)
         path_val = item.get("path")
 
         # 1. Try loading from HuggingFace audio dict/object if present
@@ -160,6 +202,10 @@ class AudioTextDataset(Dataset):
                     path_val = audio_val["path"]
             elif isinstance(audio_val, (str, Path)):
                 path_val = str(audio_val)
+
+        # Downmix stereo to mono if needed
+        if waveform is not None and waveform.ndim > 1:
+            waveform = waveform.mean(axis=-1)
 
         # 2. Try loading from file path if waveform is still None
         if waveform is None and path_val is not None:

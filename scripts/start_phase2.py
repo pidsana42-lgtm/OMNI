@@ -60,8 +60,15 @@ def precache_datasets(token: str):
                 ds = load_dataset(ds_name, **kwargs)
 
             # For audio datasets, disable auto-decode to avoid torchcodec
-            if ds_name in ["google/fleurs", "typhoon-ai/chatbot-arena-spoken-voices"]:
+            if ds_name == "google/fleurs":
                 ds = ds.cast_column("audio", HFAudio(decode=False))
+            elif ds_name == "typhoon-ai/chatbot-arena-spoken-voices":
+                for col in ["voice_user", "voice_a", "voice_b"]:
+                    if col in ds.column_names:
+                        try:
+                            ds = ds.cast_column(col, HFAudio(decode=False))
+                        except Exception:
+                            pass
 
             print(f"   ✅ {len(ds):,} samples cached.")
         except Exception as e:
