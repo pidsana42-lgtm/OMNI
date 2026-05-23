@@ -202,8 +202,17 @@ def main():
     ]
     optimizer = AdamW(param_groups, weight_decay=cfg.training.weight_decay)
 
-    total_steps = len(train_loader) * cfg.training.num_epochs
+    grad_accum_steps = cfg.training.get("gradient_accumulation_steps", 1)
+    steps_per_epoch = len(train_loader) // grad_accum_steps
+    total_steps = steps_per_epoch * cfg.training.num_epochs
     warmup_steps = int(total_steps * cfg.training.warmup_ratio)
+    
+    if accelerator.is_main_process:
+        print(f"[Phase2] Total DataLoader steps: {len(train_loader) * cfg.training.num_epochs}")
+        print(f"[Phase2] Gradient accumulation steps: {grad_accum_steps}")
+        print(f"[Phase2] Total optimizer steps: {total_steps}")
+        print(f"[Phase2] Warmup optimizer steps: {warmup_steps}")
+
     scheduler = get_cosine_schedule_with_warmup(
         optimizer,
         num_warmup_steps=warmup_steps,
@@ -215,20 +224,41 @@ def main():
         model, optimizer, train_loader, scheduler
     )
 
+    start_epoch = 0
+    resume_step = 0
     if args.resume_from:
         accelerator.load_state(args.resume_from)
+        import re
+        match = re.search(r"checkpoint-(\d+)", str(args.resume_from))
+        if match:
+            resume_step = int(match.group(1))
+            start_epoch = resume_step // len(train_loader)
+            if accelerator.is_main_process:
+                print(f"[Phase2] Resumed state loaded. Resuming training from step {resume_step} (Epoch {start_epoch + 1})")
+        else:
+            if accelerator.is_main_process:
+                print(f"[Phase2] Resumed from state: {args.resume_from}")
 
     # ── Training Loop ─────────────────────────────────────────────────────
-    global_step = 0
+    global_step = resume_step
     output_dir = Path(cfg.training.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for epoch in range(cfg.training.num_epochs):
+    for epoch in range(start_epoch, cfg.training.num_epochs):
         model.train()
         modality_losses = {"audio": [], "vision": [], "text": []}
 
+        # Skip processed batches in the resumed epoch
+        active_dataloader = train_loader
+        if args.resume_from and epoch == start_epoch:
+            resume_step_in_epoch = resume_step % len(train_loader)
+            if resume_step_in_epoch > 0:
+                active_dataloader = accelerator.skip_first_batches(train_loader, resume_step_in_epoch)
+                if accelerator.is_main_process:
+                    print(f"[Phase2] Skipping the first {resume_step_in_epoch} batches of Epoch {epoch + 1}")
+
         pbar = tqdm(
-            train_loader,
+            active_dataloader,
             desc=f"Epoch {epoch+1}/{cfg.training.num_epochs}",
             disable=not accelerator.is_main_process,
         )
