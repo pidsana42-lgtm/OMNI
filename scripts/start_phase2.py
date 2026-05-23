@@ -1,5 +1,5 @@
 """
-start_phase2.py — Pull Phase 1 checkpoint from HF Hub then start Phase 2.
+start_phase2.py — Pull Phase 1 checkpoint from HF Hub, pre-cache datasets, then start Phase 2.
 
 Usage (on new cloud session):
     git pull origin main
@@ -25,8 +25,42 @@ def parse_args():
                         help="Local directory to save the pulled checkpoint")
     parser.add_argument("--phase2_config", default="configs/phase2_finetune.yaml")
     parser.add_argument("--skip_download", action="store_true",
-                        help="Skip download if checkpoint already exists locally")
+                        help="Skip checkpoint download if already exists locally")
+    parser.add_argument("--skip_datasets", action="store_true",
+                        help="Skip dataset pre-caching")
     return parser.parse_args()
+
+
+def precache_datasets(token: str):
+    """Pre-download all Phase 2 datasets into HF cache before training starts."""
+    from datasets import load_dataset
+    from datasets import Audio as HFAudio
+
+    datasets_to_cache = [
+        # (name, config, split, description)
+        ("google/fleurs",              "th_th",  "train",      "FLEURS Thai (audio)"),
+        ("google/fleurs",              "th_th",  "validation", "FLEURS Thai (audio eval)"),
+        ("mlabonne/FineTome-100k",     None,     "train",      "FineTome text instruction"),
+        ("liuhaotian/LLaVA-Instruct-150K", None, "train",     "LLaVA vision instruction"),
+    ]
+
+    for ds_name, config, split, desc in datasets_to_cache:
+        print(f"\n📥 Pre-caching: {desc} ({ds_name}/{split})...")
+        try:
+            kwargs = dict(split=split, token=token)
+            if config:
+                ds = load_dataset(ds_name, config, **kwargs)
+            else:
+                ds = load_dataset(ds_name, **kwargs)
+
+            # For audio datasets, disable auto-decode to avoid torchcodec
+            if ds_name == "google/fleurs":
+                ds = ds.cast_column("audio", HFAudio(decode=False))
+
+            print(f"   ✅ {len(ds):,} samples cached.")
+        except Exception as e:
+            print(f"   ⚠️  Warning: Could not cache {ds_name}: {e}")
+            print(f"   → Training will attempt to download it on-the-fly.")
 
 
 def main():
@@ -38,18 +72,20 @@ def main():
         sys.exit(1)
 
     # ── Step 1: Login ─────────────────────────────────────────────────────
-    print(f"[Setup] Logging into HuggingFace Hub...")
+    print("=" * 60)
+    print("[Step 1] Logging into HuggingFace Hub...")
     from huggingface_hub import login, snapshot_download
     login(token=token)
-    print("✅ Logged in.")
+    print("✅ Logged in.\n")
 
     # ── Step 2: Pull Phase 1 checkpoint from HF Hub ───────────────────────
     local_dir = Path(args.local_dir)
+    print("=" * 60)
+    print(f"[Step 2] Downloading Phase 1 checkpoint: {args.hub_model_id}")
 
     if args.skip_download and local_dir.exists() and any(local_dir.iterdir()):
-        print(f"[Setup] Skipping download — checkpoint already at {local_dir}")
+        print(f"✅ Skipping download — checkpoint already at {local_dir}")
     else:
-        print(f"[Setup] Downloading Phase 1 checkpoint: {args.hub_model_id} → {local_dir}")
         local_dir.mkdir(parents=True, exist_ok=True)
         snapshot_download(
             repo_id=args.hub_model_id,
@@ -57,16 +93,45 @@ def main():
             local_dir=str(local_dir),
             token=token,
         )
-        print(f"✅ Phase 1 checkpoint downloaded to {local_dir}")
+        print(f"✅ Phase 1 checkpoint saved to: {local_dir}\n")
 
-    # ── Step 3: Run Phase 2 ───────────────────────────────────────────────
-    print(f"\n[Setup] Starting Phase 2 training...")
+    # ── Step 3: Validate Phase 1 checkpoint ──────────────────────────────
+    print("=" * 60)
+    print("[Step 3] Validating Phase 1 checkpoint with inference_demo.py...")
+    val_cmd = [
+        sys.executable, "scripts/inference_demo.py",
+        "--model_path", str(local_dir),
+        "--test_dataset",
+        "--max_new_tokens", "64",
+    ]
+    val_result = subprocess.run(val_cmd)
+    if val_result.returncode != 0:
+        print("\n⚠️  Phase 1 validation had errors. Review output above.")
+        ans = input("Continue to Phase 2 anyway? [y/N]: ").strip().lower()
+        if ans != "y":
+            print("Aborted. Fix the checkpoint and try again.")
+            sys.exit(1)
+    else:
+        print("✅ Phase 1 validation passed!\n")
+
+    # ── Step 4: Pre-cache all Phase 2 datasets ────────────────────────────
+    if not args.skip_datasets:
+        print("=" * 60)
+        print("[Step 4] Pre-caching Phase 2 datasets...")
+        precache_datasets(token)
+        print("\n✅ All datasets cached.\n")
+    else:
+        print("[Step 4] Skipping dataset pre-cache (--skip_datasets)\n")
+
+    # ── Step 5: Run Phase 2 ───────────────────────────────────────────────
+    print("=" * 60)
+    print(f"[Step 5] Starting Phase 2 training...")
     cmd = [
         sys.executable, "-m", "training.phase2_omni_finetune",
         "--config", args.phase2_config,
         "--phase1_checkpoint", str(local_dir),
     ]
-    print(f"[Setup] Running: {' '.join(cmd)}\n")
+    print(f"Running: {' '.join(cmd)}\n")
     result = subprocess.run(cmd)
     sys.exit(result.returncode)
 
