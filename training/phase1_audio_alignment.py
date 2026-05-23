@@ -166,17 +166,26 @@ def main():
     )
 
     # ── Resume from checkpoint ────────────────────────────────────────────
+    global_step = 0
+    start_epoch = 0
+    resume_step = 0
     if args.resume_from:
         accelerator.load_state(args.resume_from)
-        print(f"[Phase1] Resumed from {args.resume_from}")
+        print(f"[Phase1] Resumed accelerator state from {args.resume_from}")
+        try:
+            global_step = int(Path(args.resume_from).name.split("-")[-1])
+            resume_step = global_step % len(train_loader)
+            start_epoch = global_step // len(train_loader)
+            print(f"[Phase1] Calculated starting point: global_step={global_step}, start_epoch={start_epoch}, resume_step={resume_step}")
+        except Exception as e:
+            print(f"[Phase1] Warning: Could not parse step number from checkpoint. Starting from step 0. Error: {e}")
 
     # ── Training Loop ─────────────────────────────────────────────────────
-    global_step = 0
     best_eval_loss = float("inf")
     output_dir = Path(cfg.training.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for epoch in range(cfg.training.num_epochs):
+    for epoch in range(start_epoch, cfg.training.num_epochs):
         model.train()
         epoch_loss = 0.0
 
@@ -187,6 +196,12 @@ def main():
         )
 
         for step, batch in enumerate(pbar):
+            # Skip steps if resuming
+            if epoch == start_epoch and step < resume_step:
+                if step % 100 == 0 and accelerator.is_main_process:
+                    print(f"[Phase1] Skipping step {step} to resume training...")
+                continue
+
             with accelerator.accumulate(model):
                 outputs = model(
                     input_ids=batch["input_ids"],
