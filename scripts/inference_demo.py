@@ -52,7 +52,7 @@ def run_inference(args):
     print(f"[Demo] Loading model from {args.model_path}...")
     model = OmniModalModel.from_pretrained(args.model_path)
     processor = OmniProcessor.from_pretrained(
-        llm_name=args.model_path,
+        llm_name=model.config.llm_model_name,
         audio_encoder_name=model.config.audio_encoder_name,
     )
     model = model.to(args.device, dtype=torch.bfloat16)

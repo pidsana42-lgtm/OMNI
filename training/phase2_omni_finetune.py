@@ -105,7 +105,7 @@ def main():
     model = convert_mlp_to_moe(model, num_experts=4, top_k=2)
 
     processor = OmniProcessor.from_pretrained(
-        llm_name=args.phase1_checkpoint,       # Phase 1 saved tokenizer here
+        llm_name=model.config.llm_model_name,  # Load from base LLM since Phase 1 HF tokenizer might be corrupted
         audio_encoder_name=model.config.audio_encoder_name,
     )
 

@@ -323,7 +323,8 @@ class OmniProcessor:
         # Explicitly save the tokenizer with chat_template to tokenizer_config.json
         # This ensures apply_chat_template works when reloading the checkpoint
         self.tokenizer.save_pretrained(save_directory)
-        self.audio_processor.save_pretrained(save_directory)
+        # ONLY save the feature extractor from audio processor to prevent overwriting LLM's tokenizer.json
+        self.audio_processor.feature_extractor.save_pretrained(save_directory)
         print(f"[OmniProcessor] Saved to {save_directory}")
 
     @property
