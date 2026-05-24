@@ -20,10 +20,10 @@ data:
       hf_split: "train"
       eval_split: "validation"
       text_column: "transcription"
-    - hf_dataset_name: "CMKL/Porjai-Thai-voice-dataset-khummuang"
+    - hf_dataset_name: "CMKL/Porjai-Thai-voice-dataset-central"
       hf_split: "train"
       eval_split: "train"
-      text_column: "thai_sentence"
+      text_column: "sentence"
 
 training:
   num_epochs: 5                     # 3,000 × 5 = 15,000 steps (batch size=4, grad_accum=8 -> ~468 optimizer steps)
