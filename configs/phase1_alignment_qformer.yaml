@@ -28,6 +28,10 @@ data:
       hf_split: "train"
       eval_split: "train"
       text_column: "transcript"
+    - hf_dataset_name: "Thanarit/Thai-Voice-Test7"
+      hf_split: "train"
+      eval_split: "train"
+      text_column: "transcript"
 
 training:
   num_epochs: 5                     # 3,000 × 5 = 15,000 steps (batch size=4, grad_accum=8 -> ~468 optimizer steps)
