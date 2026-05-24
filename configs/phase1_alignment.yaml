@@ -9,14 +9,19 @@ model:
   projector_layers: 2
 
 data:
-  # Primary: Google FLEURS Thai — 3,000 samples, no auth required
-  hf_dataset_name: "google/fleurs"
-  hf_dataset_config: "th_th"
-  hf_split: "train"
-  eval_split: "validation"
-  text_column: "transcription"
   max_audio_seconds: 30.0
   max_text_length: 256
+  
+  audio_datasets:
+    - hf_dataset_name: "google/fleurs"
+      hf_dataset_config: "th_th"
+      hf_split: "train"
+      eval_split: "validation"
+      text_column: "transcription"
+    - hf_dataset_name: "CMKL/Porjai-Thai-voice-dataset-khummuang"
+      hf_split: "train"
+      eval_split: "train"
+      text_column: "thai_sentence"
 
 training:
   num_epochs: 5                     # เพิ่มจาก 3 → 5 epochs (3,000 × 5 = 15,000 steps)

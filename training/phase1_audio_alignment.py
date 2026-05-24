@@ -111,25 +111,76 @@ def main():
     model.print_trainable_parameters()
 
     # ── Dataset ───────────────────────────────────────────────────────────
-    train_dataset = AudioTextDataset(
-        processor=processor,
-        hf_dataset_name=cfg.data.hf_dataset_name,
-        hf_dataset_config=cfg.data.get("hf_dataset_config", None),
-        hf_split=cfg.data.get("hf_split", "train"),
-        text_column=cfg.data.get("text_column", None),
-        max_audio_seconds=cfg.data.max_audio_seconds,
-        max_text_length=cfg.data.max_text_length,
-    )
+    from torch.utils.data import ConcatDataset
 
-    eval_dataset = AudioTextDataset(
-        processor=processor,
-        hf_dataset_name=cfg.data.hf_dataset_name,
-        hf_dataset_config=cfg.data.get("hf_dataset_config", None),
-        hf_split=cfg.data.get("eval_split", "validation"),
-        text_column=cfg.data.get("text_column", None),
-        max_audio_seconds=cfg.data.max_audio_seconds,
-        max_text_length=cfg.data.max_text_length,
-    )
+    train_datasets = []
+    eval_datasets = []
+
+    if "audio_datasets" in cfg.data:
+        print("[Phase1] Loading multiple audio datasets...")
+        for audio_cfg in cfg.data.audio_datasets:
+            # 1. Train dataset
+            train_ds = AudioTextDataset(
+                processor=processor,
+                hf_dataset_name=audio_cfg.hf_dataset_name,
+                hf_dataset_config=audio_cfg.get("hf_dataset_config"),
+                hf_split=audio_cfg.get("hf_split", "train"),
+                text_column=audio_cfg.get("text_column"),
+                max_audio_seconds=cfg.data.max_audio_seconds,
+                max_text_length=cfg.data.max_text_length,
+            )
+            train_datasets.append(train_ds)
+
+            # 2. Eval dataset
+            eval_split = audio_cfg.get("eval_split") or cfg.data.get("eval_split", "validation")
+            try:
+                eval_ds = AudioTextDataset(
+                    processor=processor,
+                    hf_dataset_name=audio_cfg.hf_dataset_name,
+                    hf_dataset_config=audio_cfg.get("hf_dataset_config"),
+                    hf_split=eval_split,
+                    text_column=audio_cfg.get("text_column"),
+                    max_audio_seconds=cfg.data.max_audio_seconds,
+                    max_text_length=cfg.data.max_text_length,
+                )
+                eval_datasets.append(eval_ds)
+            except Exception as e:
+                print(f"[Phase1] Warning: Could not load eval split '{eval_split}' for {audio_cfg.hf_dataset_name}. Skipping. Error: {e}")
+
+        # Combine datasets
+        if len(train_datasets) == 1:
+            train_dataset = train_datasets[0]
+        else:
+            train_dataset = ConcatDataset(train_datasets)
+
+        if len(eval_datasets) == 1:
+            eval_dataset = eval_datasets[0]
+        elif len(eval_datasets) > 1:
+            eval_dataset = ConcatDataset(eval_datasets)
+        else:
+            # Fallback if no eval datasets loaded successfully
+            eval_dataset = train_dataset
+    else:
+        print("[Phase1] Loading single audio dataset...")
+        train_dataset = AudioTextDataset(
+            processor=processor,
+            hf_dataset_name=cfg.data.hf_dataset_name,
+            hf_dataset_config=cfg.data.get("hf_dataset_config", None),
+            hf_split=cfg.data.get("hf_split", "train"),
+            text_column=cfg.data.get("text_column", None),
+            max_audio_seconds=cfg.data.max_audio_seconds,
+            max_text_length=cfg.data.max_text_length,
+        )
+
+        eval_dataset = AudioTextDataset(
+            processor=processor,
+            hf_dataset_name=cfg.data.hf_dataset_name,
+            hf_dataset_config=cfg.data.get("hf_dataset_config", None),
+            hf_split=cfg.data.get("eval_split", "validation"),
+            text_column=cfg.data.get("text_column", None),
+            max_audio_seconds=cfg.data.max_audio_seconds,
+            max_text_length=cfg.data.max_text_length,
+        )
 
     # Subsample if requested to prevent cloud timeout and speed up Phase 1
     import random
