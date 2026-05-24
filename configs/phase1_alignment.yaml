@@ -1,5 +1,7 @@
-# Phase 1: Audio Alignment
+# Phase 1: Audio Alignment (Extended v2)
 # ─────────────────────────────────────────────
+# เพิ่ม dataset และ steps เพื่อให้ AudioProjector align ได้แม่นยำขึ้น
+# เป้าหมาย: eval_loss < 1.5 (จาก ~2.0 ของ v1)
 model:
   llm_model: "Qwen/Qwen3.5-0.8B"
   audio_encoder: "typhoon-ai/typhoon-whisper-turbo"
@@ -7,29 +9,29 @@ model:
   projector_layers: 2
 
 data:
-  # Google FLEURS (Thai) — เปิดสาธารณะ 100%, เสียงจริงฝังใน HF, ไม่ต้อง accept terms
+  # Primary: Google FLEURS Thai — 3,000 samples, no auth required
   hf_dataset_name: "google/fleurs"
   hf_dataset_config: "th_th"
   hf_split: "train"
   eval_split: "validation"
-  text_column: "transcription"   # คอลัมน์ข้อความใน FLEURS
+  text_column: "transcription"
   max_audio_seconds: 30.0
   max_text_length: 256
 
 training:
-  num_epochs: 3
-  batch_size: 4                     # Reduced from 8 to 4 to prevent CUDA OOM
-  eval_batch_size: 8                # Reduced from 16 to 8 to prevent CUDA OOM
-  gradient_accumulation_steps: 8    # Increased from 4 to 8 (effective batch size remains 32)
-  lr: 1.0e-3                        # High LR for projector-only training
+  num_epochs: 5                     # เพิ่มจาก 3 → 5 epochs (3,000 × 5 = 15,000 steps)
+  batch_size: 4
+  eval_batch_size: 8
+  gradient_accumulation_steps: 8    # effective batch = 32
+  lr: 1.0e-3                        # High LR เหมาะสำหรับ projector-only
   weight_decay: 0.01
   max_grad_norm: 1.0
-  warmup_ratio: 0.05
+  warmup_ratio: 0.05                # Warmup ช่วยให้ projector ไม่ระเบิดช่วงแรก
   num_workers: 4
   save_steps: 100
   output_dir: "outputs/phase1"
-  
-  # FLEURS TH มีประมาณ 3,000 train samples, ใช้ทั้งหมดเลย
+
+  # ใช้ FLEURS TH ทั้งหมด 3,000 samples (ไม่ตัด)
   max_train_samples: 3000
   max_eval_samples: 500
 
@@ -41,5 +43,5 @@ training:
 logging:
   use_wandb: true
   wandb_project: "thai-omni-modal"
-  run_name: "phase1-audio-alignment-real"  # real audio run
+  run_name: "phase1-audio-alignment-v2-extended"
   log_every: 50
