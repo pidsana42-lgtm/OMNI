@@ -99,10 +99,10 @@ def main():
     print(f"[Phase2] Loading Phase 1 checkpoint from {args.phase1_checkpoint}")
     model = OmniModalModel.from_pretrained(args.phase1_checkpoint)
     
-    # Convert standard dense MLP layers to MoE (4 experts, Top-2 gating)
-    print("[Phase2] Converting Dense model layers to MoE (4 Experts)...")
-    from src.modeling_moe_adapter import convert_mlp_to_moe
-    model = convert_mlp_to_moe(model, num_experts=4, top_k=2)
+    # [Phase2 Dense Mode — MoE disabled until projector converges]
+    # print("[Phase2] Converting Dense model layers to MoE (4 Experts)...")
+    # from src.modeling_moe_adapter import convert_mlp_to_moe
+    # model = convert_mlp_to_moe(model, num_experts=4, top_k=2)
 
     # Force loading tokenizer from Qwen to bypass corrupted Phase 1 tokenizer
     processor = OmniProcessor.from_pretrained(
