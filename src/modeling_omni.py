@@ -102,17 +102,34 @@ class OmniModalModel(nn.Module):
             )
             config.audio_encoder_hidden_size = whisper_hidden
 
-        print(
-            f"[OmniModal] AudioProjector: "
-            f"{whisper_hidden} → {config.projector_hidden_size} → {config.llm_hidden_size}"
-        )
-        self.audio_projector = AudioProjector(
-            input_dim=whisper_hidden,
-            output_dim=config.llm_hidden_size,
-            hidden_dim=config.projector_hidden_size,
-            num_layers=config.projector_num_layers,
-            dropout=config.projector_dropout,
-        )
+        # Check projector type from config (default to mlp)
+        projector_type = getattr(config, "projector_type", "mlp")
+        if projector_type == "qformer":
+            from .projector import AudioQFormerProjector
+            print(
+                f"[OmniModal] AudioQFormerProjector: "
+                f"{whisper_hidden} → Q-Former (queries={config.qformer_num_query_tokens}, layers={config.qformer_num_layers}) → MLP → {config.llm_hidden_size}"
+            )
+            self.audio_projector = AudioQFormerProjector(
+                input_dim=whisper_hidden,
+                output_dim=config.llm_hidden_size,
+                num_query_tokens=config.qformer_num_query_tokens,
+                num_layers=config.qformer_num_layers,
+                nhead=config.qformer_num_heads,
+                hidden_dim=config.projector_hidden_size,
+            )
+        else:
+            print(
+                f"[OmniModal] AudioProjector (MLP): "
+                f"{whisper_hidden} → {config.projector_hidden_size} → {config.llm_hidden_size}"
+            )
+            self.audio_projector = AudioProjector(
+                input_dim=whisper_hidden,
+                output_dim=config.llm_hidden_size,
+                hidden_dim=config.projector_hidden_size,
+                num_layers=config.projector_num_layers,
+                dropout=config.projector_dropout,
+            )
 
         # ── 3. Core LLM: Qwen3.5-0.8B (Vision already built-in) ─────────
         print(f"[OmniModal] Loading core LLM: {config.llm_model_name}")

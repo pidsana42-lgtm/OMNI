@@ -1,0 +1,49 @@
+# Phase 1: Audio Alignment (Q-Former)
+# ─────────────────────────────────────────────
+# เป้าหมาย: เทรน Q-Former เพื่อดึงข้อมูลและบีบอัดเสียงจาก Whisper ไปยัง Qwen space
+model:
+  llm_model: "Qwen/Qwen3.5-0.8B"
+  audio_encoder: "typhoon-ai/typhoon-whisper-turbo"
+  projector_type: "qformer"            # ใช้ Q-Former + MLP
+  projector_hidden: 2048               # Intermediate dimension สำหรับ MLP ปิดท้าย
+  qformer_num_query_tokens: 64         # บีบอัด sequence เหลือ 64 tokens
+  qformer_num_layers: 2                # Q-Former Transformer Decoder layers
+  qformer_num_heads: 8                 # Attention heads
+
+data:
+  # Primary: Google FLEURS Thai — 3,000 samples, no auth required
+  hf_dataset_name: "google/fleurs"
+  hf_dataset_config: "th_th"
+  hf_split: "train"
+  eval_split: "validation"
+  text_column: "transcription"
+  max_audio_seconds: 30.0
+  max_text_length: 256
+
+training:
+  num_epochs: 5                     # 3,000 × 5 = 15,000 steps (batch size=4, grad_accum=8 -> ~468 optimizer steps)
+  batch_size: 4
+  eval_batch_size: 8
+  gradient_accumulation_steps: 8    # effective batch = 32
+  lr: 5.0e-4                        # Learning rate สำหรับ Q-Former + MLP (ปรับลดลงจาก 1e-3 เพื่อความเสถียร)
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  warmup_ratio: 0.05                # Warmup
+  num_workers: 4
+  save_steps: 100
+  output_dir: "outputs/phase1_qformer"
+
+  # ใช้ FLEURS TH ทั้งหมด 3,000 samples
+  max_train_samples: 3000
+  max_eval_samples: 500
+
+  # Automatic Hugging Face Hub synchronization
+  push_to_hub: true
+  hub_model_id: "thai-omni-modal-0.8b-phase1-qformer"
+  hub_private: true
+
+logging:
+  use_wandb: true
+  wandb_project: "thai-omni-modal"
+  run_name: "phase1-audio-alignment-qformer"
+  log_every: 50

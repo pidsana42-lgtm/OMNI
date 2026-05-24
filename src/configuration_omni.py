@@ -32,9 +32,13 @@ class OmniConfig(PretrainedConfig):
         # Will be auto-detected at model init if set to None
         audio_encoder_hidden_size: int = 1280,
         llm_hidden_size: int = 1024,         # Qwen3.5-0.8B hidden dim
+        projector_type: str = "mlp",         # "mlp" or "qformer"
         projector_hidden_size: int = 2048,   # Intermediate MLP dim
         projector_num_layers: int = 2,       # Depth of projector MLP
         projector_dropout: float = 0.0,
+        qformer_num_query_tokens: int = 64,  # Number of query tokens for Q-Former
+        qformer_num_layers: int = 2,         # Q-Former depth
+        qformer_num_heads: int = 8,          # Q-Former attention heads
 
         # ── Special tokens ────────────────────────────────────────────────
         audio_start_token: str = "<|audio_start|>",
@@ -67,9 +71,13 @@ class OmniConfig(PretrainedConfig):
         # Projector architecture
         self.audio_encoder_hidden_size = audio_encoder_hidden_size
         self.llm_hidden_size = llm_hidden_size
+        self.projector_type = projector_type
         self.projector_hidden_size = projector_hidden_size
         self.projector_num_layers = projector_num_layers
         self.projector_dropout = projector_dropout
+        self.qformer_num_query_tokens = qformer_num_query_tokens
+        self.qformer_num_layers = qformer_num_layers
+        self.qformer_num_heads = qformer_num_heads
 
         # Special tokens
         self.audio_start_token = audio_start_token

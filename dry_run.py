@@ -100,6 +100,39 @@ def test_projector():
 
 test("AudioProjector forward pass shapes", test_projector)
 
+# ── Test 2.5: AudioQFormerProjector shapes ────────────────────────
+print("\n📋 [2.5/6] AudioQFormerProjector")
+def test_qformer_projector():
+    """AudioQFormerProjector forward pass — shape check"""
+    from src.projector import AudioQFormerProjector
+    B, T, whisper_h = 2, 1500, 1280
+    qwen_h = 1024
+    num_queries = 64
+
+    proj = AudioQFormerProjector(
+        input_dim=whisper_h,
+        output_dim=qwen_h,
+        num_query_tokens=num_queries,
+        num_layers=2,
+        nhead=8,
+        hidden_dim=2048,
+    )
+    proj.eval()
+
+    x = torch.randn(B, T, whisper_h)
+    with torch.no_grad():
+        out = proj(x)
+
+    assert out.shape == (B, num_queries, qwen_h), f"Expected {(B, num_queries, qwen_h)}, got {out.shape}"
+    assert not torch.isnan(out).any(), "NaN in Q-Former output!"
+    assert not torch.isinf(out).any(), "Inf in Q-Former output!"
+
+    n_params = proj.num_parameters()
+    assert n_params > 1_000_000, f"Suspicious Q-Former param count: {n_params:,}"
+    print(f"         Q-Former params: {n_params:,}")
+
+test("AudioQFormerProjector forward pass shapes", test_qformer_projector)
+
 # ── Test 3: ProjectorVariants ────────────────────────────────────
 print("\n📋 [3/6] AudioProjector variants")
 def test_projector_variants():
